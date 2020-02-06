@@ -39,6 +39,8 @@ elif [[  $LOGINHOST =~ \.jureca$ ]]; then
    STRATEGY="jureca"
 elif [[  $LOGINHOST = ubuntu ]]; then
    STRATEGY="ubuntu"
+elif [[  $LOGINHOST = cartesius ]]; then
+   STRATEGY="cartesius"
 elif [[  $LOGINHOST =~ ^juwels[0-9]+\.fz\-juelich\.de$ ]]; then
    STRATEGY="juwels"
 else

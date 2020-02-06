@@ -1,0 +1,15 @@
+module load 2019
+module load CMake/3.12.1-GCCcore-7.3.0
+module unload GCCcore
+module unload zlib
+module load netCDF/4.6.1-intel-2018b
+module load netCDF-Fortran/4.4.4-intel-2018b 
+module load intel/2018b
+export FC=mpiifort CC=mpiicc CXX=mpiicc
+export NETCDF_C_INCLUDE_DIRECTORIES=$EBROOTNETCDF/include
+export NETCDF_CXX_INCLUDE_DIRECTORIES=$EBROOTNETCDF/include
+export NETCDF_Fortran_INCLUDE_DIRECTORIES=$EBROOTNETCDFMINFORTRAN/include
+export CFLAGS="-O3 -xHost"
+#export CXXFLAGS="-O3 -xHost"
+
+
