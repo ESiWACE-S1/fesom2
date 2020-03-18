@@ -2,8 +2,8 @@
 ! Contains routines needed for computations of dynamics.
 ! includes: update_vel, compute_vel_nodes, viscosity_filt2x
 ! ===================================================================
-SUBROUTINE update_vel
-USE o_MESH
+SUBROUTINE update_vel(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -13,6 +13,9 @@ IMPLICIT NONE
 integer       :: elem, elnodes(3), nz, m
 real(kind=WP) :: eta(3) 
 real(kind=WP) :: Fx, Fy
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 
  DO elem=1, myDim_elem2D
     elnodes=elem2D_nodes(:,elem)
@@ -28,8 +31,8 @@ eta_n=eta_n+d_eta
 call exchange_elem(UV)
 end subroutine update_vel
 !==========================================================================
-subroutine compute_vel_nodes
-USE o_MESH
+subroutine compute_vel_nodes(mesh)
+USE MOD_MESH
 USE o_PARAM
 USE o_ARRAYS
 USE g_PARSUP
@@ -37,6 +40,10 @@ use g_comm_auto
 IMPLICIT NONE
 integer            :: n, nz, k, elem
 real(kind=WP)      :: tx, ty, tvol
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
 DO n=1, myDim_nod2D 
    DO nz=1, nlevels_nod2D(n)-1
       tvol=0.0_WP
@@ -56,19 +63,21 @@ END DO
 call exchange_nod(Unode)
 end subroutine compute_vel_nodes
 !===========================================================================
-SUBROUTINE viscosity_filt2x
-USE o_MESH
+SUBROUTINE viscosity_filt2x(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
 USE g_config
 USE g_comm_auto
 IMPLICIT NONE
-
+type(t_mesh), intent(in) , target :: mesh
 real(kind=WP) :: u1, v1, tau_inv, s, factor, factor1, factor2
 integer       :: ed, el(2), nz, elem
-real(kind=WP) :: UV_c(2,nl-1,myDim_elem2D+eDim_elem2D), UV_f(2,nl-1,myDim_elem2D+eDim_elem2D)
- 
+real(kind=WP) :: UV_c(2,mesh%nl-1,myDim_elem2D+eDim_elem2D), UV_f(2,mesh%nl-1,myDim_elem2D+eDim_elem2D)
+
+#include "associate_mesh.h"
+
 ! Filter is applied twice. It should be approximately 
 ! equivalent to biharmonic operator with the coefficient
 ! (tau_c/day)a^3/9. Scaling inside is found to help 
@@ -77,7 +86,7 @@ real(kind=WP) :: UV_c(2,nl-1,myDim_elem2D+eDim_elem2D), UV_f(2,nl-1,myDim_elem2D
 
 UV_c=0.0_WP
 !NR UV_f=0.0_WP
-tau_inv=dt*tau_c/3600.0/24.0     ! SET IT experimentally 
+tau_inv=dt*tau_c/3600.0_WP/24.0_WP     ! SET IT experimentally 
   
 DO ed=1, myDim_edge2D+eDim_edge2D
    if(myList_edge2D(ed)>edge2D_in) cycle
@@ -160,15 +169,15 @@ END DO
 !NR       UV_rhs(2,nz,elem) = UV_rhs(2,nz,elem)+UV_f(2,nz,elem)!*min(1.0_WP, 2.0_WP*v1/u1)
 !NR    END DO 
 !NR END DO
-
-
 end subroutine viscosity_filt2x
 !===========================================================================
-subroutine viscosity_filter(option)
+subroutine viscosity_filter(option, mesh)
 use o_PARAM
 use g_PARSUP
+use MOD_MESH
 IMPLICIT NONE 
-integer      ::  option
+integer                  :: option
+type(t_mesh), intent(in) , target :: mesh
 ! Driving routine 
 ! Background viscosity is selected in terms of Vl, where V is 
 ! background velocity scale and l is the resolution. V is 0.005 
@@ -183,27 +192,27 @@ CASE (1)
      ! ====
      ! Laplacian+Leith parameterization + harmonic background
      ! ====
-     call h_viscosity_leith
-     call viscosity_filtxx
+     call h_viscosity_leith(mesh)
+     call viscosity_filtxx(mesh)
 CASE (2)
      ! ===
      ! Laplacian+Leith+biharmonic background
      ! ===
-     call h_viscosity_leith
-     call viscosity_filtxxx
+     call h_viscosity_leith(mesh)
+     call viscosity_filtxxx(mesh)
 CASE (3)
      ! ===
      ! Biharmonic+Leith+ background 
      ! ===
-     call h_viscosity_leith
-     call viscosity_filt2xx(2)
+     call h_viscosity_leith(mesh)
+     call viscosity_filt2xx(2, mesh)
 CASE (4)
      ! ===
      ! Biharmonic+upwind-type+ background 
      ! ===
-     call viscosity_filt2xx(1)
+     call viscosity_filt2xx(1, mesh)
 CASE (5)
-     call viscosity_filt_h_backscatter
+     call viscosity_filt_h_backscatter(mesh)
 CASE DEFAULT
      if (mype==0) write(*,*) 'mixing scheme with option ' , option, 'has not yet been implemented'
      call par_ex
@@ -211,8 +220,8 @@ CASE DEFAULT
 END SELECT
 end subroutine viscosity_filter  
 ! ===================================================================
-SUBROUTINE viscosity_filtxx
-USE o_MESH
+SUBROUTINE viscosity_filtxx(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -221,6 +230,10 @@ IMPLICIT NONE
 
 real(kind=WP) :: u1, v1, le(2), len, crosslen, vi 
 integer       :: nz, ed, el(2)
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
  ! An analog of harmonic viscosity operator.  
  ! It adds to the rhs(0) Visc*(u1+u2+u3-3*u0)/area
  ! on triangles, which is Visc*Laplacian/4 on equilateral triangles. 
@@ -238,7 +251,7 @@ integer       :: nz, ed, el(2)
     crosslen=sqrt(le(1)**2+le(2)**2) 
     DO  nz=1,minval(nlevels(el))-1
      vi=dt*len*(Visc(nz,el(1))+Visc(nz,el(2)))/crosslen
-     vi=max(vi,0.005*len*dt) ! This helps to reduce noise in places where 
+     vi=max(vi,0.005_WP*len*dt) ! This helps to reduce noise in places where 
                               ! Visc is small and decoupling might happen 
      u1=(UV(1,nz,el(1))-UV(1,nz,el(2)))*vi
      v1=(UV(2,nz,el(1))-UV(2,nz,el(2)))*vi
@@ -247,12 +260,12 @@ integer       :: nz, ed, el(2)
      UV_rhs(1,nz,el(2))=UV_rhs(1,nz,el(2))+u1/elem_area(el(2))
      UV_rhs(2,nz,el(1))=UV_rhs(2,nz,el(1))-v1/elem_area(el(1))
      UV_rhs(2,nz,el(2))=UV_rhs(2,nz,el(2))+v1/elem_area(el(2))
-    END DO 
+    END DO
  END DO
 end subroutine viscosity_filtxx
 ! ===================================================================
-SUBROUTINE viscosity_filt2xx(option)
-USE o_MESH
+SUBROUTINE viscosity_filt2xx(option, mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -266,6 +279,9 @@ IMPLICIT NONE
 real(kind=WP) :: u1, v1, vi, len
 integer       :: ed, el(2), nz, option
 real(kind=WP), allocatable  :: U_c(:,:), V_c(:,:) 
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 
  ! Filter is applied twice. 
 ed=myDim_elem2D+eDim_elem2D
@@ -294,7 +310,7 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
      ! ====
      ! Case 1 -- an analog to the third-order upwind (vi=|u|l/12)
      ! ====
-     vi=max(0.2,sqrt(UV(1,nz,ed)**2+UV(2,nz,ed)**2))*len 
+     vi=max(0.2_WP,sqrt(UV(1,nz,ed)**2+UV(2,nz,ed)**2))*len 
      U_c(nz,ed)=-U_c(nz,ed)*vi                             
      V_c(nz,ed)=-V_c(nz,ed)*vi
     END DO
@@ -310,7 +326,7 @@ if(option==2) then
      ! ===   
      ! Case 2 -- Leith +background (call h_viscosity_leith)
      ! ===
-     vi=max(Visc(nz,ed),0.15*len)
+     vi=max(Visc(nz,ed),0.15_WP*len)
      !    
      U_c(nz,ed)=-U_c(nz,ed)*vi                             
      V_c(nz,ed)=-V_c(nz,ed)*vi
@@ -334,11 +350,10 @@ if(option==2) then
  END DO
      
  deallocate(V_c,U_c)
-   
 end subroutine viscosity_filt2xx
 ! ===================================================================
-SUBROUTINE viscosity_filtxxx
-USE o_MESH
+SUBROUTINE viscosity_filtxxx(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -353,6 +368,10 @@ IMPLICIT NONE
 real(kind=WP) :: u1, v1, vi, len, crosslen, le(2)
 integer       :: ed, el(2), nz
 real(kind=WP), allocatable  :: U_c(:,:), V_c(:,:) 
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
  ! Filter is applied twice. 
 ed=myDim_elem2D+eDim_elem2D
 allocate(U_c(nl-1,ed), V_c(nl-1, ed)) 
@@ -387,7 +406,7 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  Do ed=1,myDim_elem2D
     len=0.01*sqrt(elem_area(ed))                     
     Do nz=1,nlevels(ed)-1
-     vi=dt*abs(min(Visc(nz,ed)-len,0.0))    
+     vi=dt*abs(min(Visc(nz,ed)-len,0.0_WP))    
      U_c(nz,ed)=-U_c(nz,ed)*vi                             
      V_c(nz,ed)=-V_c(nz,ed)*vi
     END DO
@@ -408,12 +427,11 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  END DO
      
  deallocate(V_c,U_c)
-   
 end subroutine viscosity_filtxxx
 
 ! ===================================================================
 
-SUBROUTINE h_viscosity_leith
+SUBROUTINE h_viscosity_leith(mesh)
 !
 ! Coefficient of horizontal viscosity is a combination of 
 ! the Leith and modified Leith (with Div_c)
@@ -423,7 +441,7 @@ SUBROUTINE h_viscosity_leith
 ! Can only be used with the  momentum invariant 
 ! form
 !
-USE o_MESH
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -434,8 +452,12 @@ real(kind=WP)  ::  dz, div_elem(3), xe, ye, vi
 integer        :: elem, nl1, nz, elnodes(3),n,k, nt
 real(kind=WP)  :: leithx, leithy
 real(kind=WP), allocatable :: aux(:,:) 
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
 	!  
-	if(mom_adv<4) call relative_vorticity  !!! vorticity array should be allocated
+	if(mom_adv<4) call relative_vorticity(mesh)  !!! vorticity array should be allocated
 	! Fill in viscosity:
 	DO  elem=1, myDim_elem2D    	!! m=1, myDim_elem2D
 									!! elem=myList_elem2D(m)
@@ -463,7 +485,7 @@ real(kind=WP), allocatable :: aux(:,:)
 			leithx=sum(gradient_sca(1:3,elem)*div_elem)
 			leithy=sum(gradient_sca(4:6,elem)*div_elem)
 			vi=A_hor*sqrt(elem_area(elem)/scale_area)
-			Visc(nz,elem)=0.2*min(elem_area(elem)*sqrt((Div_c*(xe**2+ye**2) &
+			Visc(nz,elem)=0.2_WP*min(elem_area(elem)*sqrt((Div_c*(xe**2+ye**2) &
 				+ Leith_c*(leithx**2+leithy**2))*elem_area(elem)) &
 				+ vi, elem_area(elem)/dt)
 		end do                        !! 0.1 here comes from (2S)^{3/2}/pi^3
@@ -498,7 +520,7 @@ real(kind=WP), allocatable :: aux(:,:)
 			END Do
 		end do
 	end do
-	call exchange_elem(Visc)  
+	call exchange_elem(Visc)
 	deallocate(aux)
 END subroutine h_viscosity_leith
 ! =======================================================================
@@ -521,8 +543,8 @@ END subroutine h_viscosity_leith
 !Important:  We do not need to call routines computing the Leith viscosity and velocity gradient.
 !This makes code faster. Do not forget this!
 ! ===================================================================
-SUBROUTINE viscosity_filt_bh
-USE o_MESH
+SUBROUTINE viscosity_filt_bh(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -538,12 +560,14 @@ IMPLICIT NONE
 real(kind=8)  :: u1, v1, vi, len
 integer       :: ed, el(2), nz
 real(kind=8), allocatable  :: U_c(:,:), V_c(:,:) 
-!
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 !
 ed=myDim_elem2D+eDim_elem2D
 allocate(U_c(nl-1,ed), V_c(nl-1, ed)) 
- U_c=0.0_8
- V_c=0.0_8
+ U_c=0.0_WP
+ V_c=0.0_WP
  DO ed=1, myDim_edge2D+eDim_edge2D
     if(myList_edge2D(ed)>edge2D_in) cycle
     el=edge_tri(:,ed)
@@ -559,11 +583,11 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  
  Do ed=1,myDim_elem2D
     len=sqrt(elem_area(ed))                     
-    len=len/100.0_8
+    len=len/100.0_WP
     Do nz=1,nlevels(ed)-1
      ! vi has the sense of harmonic viscosity coef. because of 
      ! division by area in the end 
-     vi=dt*max(sqrt(U_c(nz,ed)**2+V_c(nz,ed)**2), 5*(U_c(nz,ed)**2+V_c(nz,ed)**2))*len   
+     vi=dt*max(sqrt(U_c(nz,ed)**2+V_c(nz,ed)**2), 5.0_WP*(U_c(nz,ed)**2+V_c(nz,ed)**2))*len   
      U_c(nz,ed)=-U_c(nz,ed)*vi                             
      V_c(nz,ed)=-V_c(nz,ed)*vi
     END DO
@@ -584,11 +608,10 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  END DO
      
  deallocate(V_c,U_c)
-   
 end subroutine viscosity_filt_bh
 ! ===================================================================
-SUBROUTINE viscosity_filt_bh2
-USE o_MESH
+SUBROUTINE viscosity_filt_bh2(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -604,16 +627,18 @@ IMPLICIT NONE
 real(kind=8)  :: u1, v1, vi, len
 integer       :: ed, el(2), nz
 real(kind=8), allocatable  :: U_c(:,:), V_c(:,:) 
-!
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 !
 ed=myDim_elem2D+eDim_elem2D
 allocate(U_c(nl-1,ed), V_c(nl-1, ed)) 
- U_c=0.0_8
- V_c=0.0_8
+ U_c=0.0_WP
+ V_c=0.0_WP
  DO ed=1, myDim_edge2D+eDim_edge2D
     if(myList_edge2D(ed)>edge2D_in) cycle
     el=edge_tri(:,ed)
-    len=sqrt(sum(elem_area(el)))/100.0_8
+    len=sqrt(sum(elem_area(el)))/100.0_WP
     DO  nz=1,minval(nlevels(el))-1
      u1=(UV(1,nz,el(1))-UV(1,nz,el(2)))
      v1=(UV(2,nz,el(1))-UV(2,nz,el(2)))
@@ -632,7 +657,7 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  DO ed=1, myDim_edge2D+eDim_edge2D
     if(myList_edge2D(ed)>edge2D_in) cycle
      el=edge_tri(:,ed)
-     len=sqrt(sum(elem_area(el)))/100.0_8
+     len=sqrt(sum(elem_area(el)))/100.0_WP
     DO  nz=1,minval(nlevels(el))-1
      u1=(UV(1,nz,el(1))-UV(1,nz,el(2)))
      v1=(UV(2,nz,el(1))-UV(2,nz,el(2)))
@@ -647,11 +672,10 @@ allocate(U_c(nl-1,ed), V_c(nl-1, ed))
  END DO
      
  deallocate(V_c,U_c)
-   
 end subroutine viscosity_filt_bh2
 ! ===================================================================
-SUBROUTINE viscosity_filt_h
-USE o_MESH
+SUBROUTINE viscosity_filt_h(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -661,6 +685,10 @@ IMPLICIT NONE
 
 real(kind=8)  :: u1, v1, le, vi 
 integer       :: nz, ed, el(2)
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
  ! An analog of harmonic viscosity operator.  
  ! The contribution from boundary edges is neglected (free slip).
  !
@@ -669,7 +697,7 @@ integer       :: nz, ed, el(2)
  DO ed=1, myDim_edge2D+eDim_edge2D
     if(myList_edge2D(ed)>edge2D_in) cycle
     el=edge_tri(:,ed)
-    le=sqrt(sum(elem_area(el)))/30.0_8
+    le=sqrt(sum(elem_area(el)))/30.0_WP
     DO  nz=1,minval(nlevels(el))-1
       u1=UV(1,nz,el(1))-UV(1,nz,el(2))
       v1=UV(2,nz,el(1))-UV(2,nz,el(2))
@@ -684,8 +712,8 @@ integer       :: nz, ed, el(2)
  END DO
 end subroutine viscosity_filt_h
 ! ===================================================================
-SUBROUTINE viscosity_filt_h_backscatter
-USE o_MESH
+SUBROUTINE viscosity_filt_h_backscatter(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -696,6 +724,10 @@ IMPLICIT NONE
 real(kind=8)  :: u1, v1, le, vi 
 integer       :: nz, ed, el(2), nelem(3),k, elem
 real(kind=8), allocatable  ::  U_b(:,:), V_b(:,:), U_c(:,:), V_c(:,:)  
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
  ! An analog of harmonic viscosity operator.
  ! Same as visc_filt_h, but with the backscatter. 
  ! Here the contribution from squared velocities is added to the viscosity.    
@@ -705,10 +737,10 @@ real(kind=8), allocatable  ::  U_b(:,:), V_b(:,:), U_c(:,:), V_c(:,:)
  allocate(U_b(nl-1,ed), V_b(nl-1, ed))
  ed=myDim_nod2D+eDim_nod2D
  allocate(U_c(nl-1,ed), V_c(nl-1,ed))
- U_b=0.0_8
- V_b=0.0_8 
- U_c=0.0_8
- V_c=0.0_8
+ U_b=0.0_WP
+ V_b=0.0_WP
+ U_c=0.0_WP
+ V_c=0.0_WP
  DO ed=1, myDim_edge2D+eDim_edge2D
     if(myList_edge2D(ed)>edge2D_in) cycle
     el=edge_tri(:,ed)
@@ -733,7 +765,7 @@ real(kind=8), allocatable  ::  U_b(:,:), V_b(:,:), U_c(:,:), V_c(:,:)
    DO ed=1, myDim_nod2D 
     DO nz=1, nlevels_nod2D(ed)-1
        vi=0.0_WP
-       u1=0.0_8
+       u1=0.0_WP
        v1=0.0_WP
        DO k=1, nod_in_elem2D_num(ed)
            elem=nod_in_elem2D(k,ed)
@@ -750,8 +782,8 @@ real(kind=8), allocatable  ::  U_b(:,:), V_b(:,:), U_c(:,:), V_c(:,:)
   do ed=1, myDim_elem2D
          nelem=elem2D_nodes(:,ed)
          Do nz=1, nlevels(ed)-1
-         UV_rhs(1,nz,ed)=UV_rhs(1,nz,ed)+U_b(nz,ed) -easy_bs_return*sum(U_c(nz,nelem))/3.0_8
-         UV_rhs(2,nz,ed)=UV_rhs(2,nz,ed)+V_b(nz,ed) -easy_bs_return*sum(V_c(nz,nelem))/3.0_8 
+         UV_rhs(1,nz,ed)=UV_rhs(1,nz,ed)+U_b(nz,ed) -easy_bs_return*sum(U_c(nz,nelem))/3.0_WP
+         UV_rhs(2,nz,ed)=UV_rhs(2,nz,ed)+V_b(nz,ed) -easy_bs_return*sum(V_c(nz,nelem))/3.0_WP
          END DO
   end do
  deallocate(V_c,U_c,V_b,U_b)

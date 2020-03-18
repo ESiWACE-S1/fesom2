@@ -1,6 +1,6 @@
-subroutine mo_convect
+subroutine mo_convect(mesh)
 USE o_PARAM
-USE o_MESH
+USE MOD_MESH
 USE o_ARRAYS
 USE g_PARSUP
 USE g_config
@@ -8,8 +8,11 @@ use i_arrays
 use g_comm_auto
 IMPLICIT NONE
 
-integer               :: node, elem, nz, elnodes(3)
-real(kind=WP)         :: kv_conv=0.1_WP, av_conv=0.1_WP
+integer                  :: node, elem, nz, elnodes(3)
+real(kind=WP)            :: kv_conv=0.1_WP, av_conv=0.1_WP
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 
 if (mo_on) then
     do node=1, myDim_nod2D+eDim_nod2D
@@ -34,7 +37,7 @@ end if
 DO node=1, myDim_nod2D+eDim_nod2D
    DO nz=2, nlevels_nod2d(node)-1
       if (mo_on) Kv(nz,node)=Kv(nz,node)+mo(nz,node)
-      if (bvfreq(nz, node) < 0.) Kv(nz,node)=max(kv_conv, Kv(nz,node))
+      if (bvfreq(nz, node) < 0._WP) Kv(nz,node)=max(kv_conv, Kv(nz,node))
 !     Kv(nz,node)=min(Kv(nz,node), kv_conv)
    END DO
 END DO
@@ -43,12 +46,11 @@ END DO
 DO elem=1, myDim_elem2D
     elnodes=elem2D_nodes(:,elem)
     DO nz=2,nlevels(elem)-1
-        if (mo_on) Av(nz,elem)=Av(nz,elem)+sum(mo(nz,elnodes))/3.0 
-        if (any(bvfreq(nz, elnodes) < 0.)) Av(nz,elem)=max(av_conv, Av(nz,elem))
+        if (mo_on) Av(nz,elem)=Av(nz,elem)+sum(mo(nz,elnodes))/3.0_WP
+        if (any(bvfreq(nz, elnodes) < 0._WP)) Av(nz,elem)=max(av_conv, Av(nz,elem))
 !      Av(nz,elem)=min(Av(nz,elem), av_conv)
     END DO
 END DO
 !!PS call exchange_elem(Av)
-
 end subroutine mo_convect
 

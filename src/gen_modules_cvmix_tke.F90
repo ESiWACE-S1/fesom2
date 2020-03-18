@@ -6,7 +6,7 @@
 ! This module calls subroutines from the CVMix library for the
 ! calculation of vertical mixing: TKE scheme 
 !
-! @see  Gaspar, P., Y. Grégoris, and J.-M. Lefevre
+! @see  Gaspar, P., Y. Grégoris, and J.-M. Lefevre, 1990
 !       J. Geophys. Res., 95(C9), 16179–16193, doi:10.1029/JC095iC09p16179.
 !
 ! @see  Blanke, B., P. Delecluse
@@ -25,7 +25,7 @@ module g_cvmix_tke
     ! module calls from FESOM
     use g_config , only: dt
     use o_param           
-    use o_mesh
+    use mod_mesh
     use g_parsup
     use o_arrays
     use g_comm_auto 
@@ -116,11 +116,13 @@ module g_cvmix_tke
     !===========================================================================
     ! allocate and initialize TKE 2D and 3D variables --> call initialisation 
     ! routine from cvmix library
-    subroutine init_cvmix_tke
-        character(len=100) :: nmlfile
-        logical            :: nmlfile_exist=.False.
-        integer            :: node_size
-        
+    subroutine init_cvmix_tke(mesh)
+        implicit none
+        character(len=100)       :: nmlfile
+        logical                  :: nmlfile_exist=.False.
+        integer                  :: node_size
+        type(t_mesh), intent(in), target :: mesh
+#include "associate_mesh.h"
         !_______________________________________________________________________
         if(mype==0) then
             write(*,*) '____________________________________________________________'
@@ -234,20 +236,22 @@ module g_cvmix_tke
                       only_tke       = tke_only,           &
                       tke_min        = tke_min,            &
                       tke_surf_min   = tke_surf_min    )
-            
     end subroutine init_cvmix_tke
     !
     !
     !
     !===========================================================================
-    ! calculate TKE vertrical mixing coefficients from CVMIX library
-    subroutine calc_cvmix_tke
-        
+    ! calculate TKE vertical mixing coefficients from CVMIX library
+    subroutine calc_cvmix_tke(mesh)
+        implicit none
+        type(t_mesh), intent(in), target :: mesh
         integer       :: node, elem, nelem, nz, nln, elnodes(3), node_size
         real(kind=WP) :: tvol
-        real(kind=WP) :: dz_trr(nl), bvfreq2(nl), vshear2(nl)
-        real(kind=WP) :: tke_Av_old(nl), tke_Kv_old(nl), tke_old(nl)
+        real(kind=WP) :: dz_trr(mesh%nl), bvfreq2(mesh%nl), vshear2(mesh%nl)
+        real(kind=WP) :: tke_Av_old(mesh%nl), tke_Kv_old(mesh%nl), tke_old(mesh%nl)
         
+#include "associate_mesh.h"
+
         node_size = myDim_nod2D
         !_______________________________________________________________________
         ! calculate all neccessary forcing for TKE 
@@ -384,6 +388,5 @@ module g_cvmix_tke
                 Av(nz,elem) = sum(tke_Av(nz,elnodes))/3.0_WP    ! (elementwise)                
             end do
         end do
-        
     end subroutine calc_cvmix_tke
 end module g_cvmix_tke

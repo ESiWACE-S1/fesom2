@@ -1,5 +1,6 @@
 ! =================================================================
-subroutine ocean_setup
+subroutine ocean_setup(mesh)
+USE MOD_MESH
 USE o_PARAM
 USE g_PARSUP
 USE o_ARRAYS
@@ -11,7 +12,7 @@ use g_cvmix_pp
 use g_cvmix_kpp
 use g_cvmix_tidal
 IMPLICIT NONE
-
+type(t_mesh), intent(in) , target :: mesh
     !___setup virt_salt_flux____________________________________________________
     ! if the ale thinkness remain unchanged (like in 'linfs' case) the vitrual 
     ! salinity flux need to be used
@@ -26,8 +27,7 @@ IMPLICIT NONE
         use_virt_salt=.true.
         is_nonlinfs = 0.0_WP
     end if
-    call array_setup
-    
+    call array_setup(mesh)
     !___________________________________________________________________________
     ! initialize arrays for ALE
     if (mype==0) then
@@ -35,8 +35,8 @@ IMPLICIT NONE
        write(*,*) ' --> initialise ALE arrays + sparse SSH stiff matrix'
        write(*,*)
     end if
-    call init_ale
-    call init_stiff_mat_ale !!PS test        
+    call init_ale(mesh)
+    call init_stiff_mat_ale(mesh) !!PS test        
     !___________________________________________________________________________
     ! initialize arrays from cvmix library for CVMIX_KPP, CVMIX_PP, CVMIX_TKE,
     ! CVMIX_IDEMIX and CVMIX_TIDAL
@@ -59,37 +59,37 @@ IMPLICIT NONE
             stop "!not existing mixing scheme!"
             call par_ex
     end select
-    
+
     ! initialise fesom1.4 like KPP
     if     (mix_scheme_nmb==1 .or. mix_scheme_nmb==17) then
-        call oce_mixing_kpp_init
+        call oce_mixing_kpp_init(mesh)
     ! initialise fesom1.4 like PP
     elseif (mix_scheme_nmb==2 .or. mix_scheme_nmb==27) then
     
     ! initialise cvmix_KPP
     elseif (mix_scheme_nmb==3 .or. mix_scheme_nmb==37) then
-        call init_cvmix_kpp    
+        call init_cvmix_kpp(mesh)
         
     ! initialise cvmix_PP    
     elseif (mix_scheme_nmb==4 .or. mix_scheme_nmb==47) then
-        call init_cvmix_pp
+        call init_cvmix_pp(mesh)
         
     ! initialise cvmix_TKE    
     elseif (mix_scheme_nmb==5 .or. mix_scheme_nmb==56) then
-        call init_cvmix_tke
+        call init_cvmix_tke(mesh)
         
     endif
-    
+  
     ! initialise additional mixing cvmix_IDEMIX --> only in combination with 
     ! cvmix_TKE+cvmix_IDEMIX or stand alone for debbuging as cvmix_TKE
     if     (mod(mix_scheme_nmb,10)==6) then
-        call init_cvmix_idemix
+        call init_cvmix_idemix(mesh)
         
     ! initialise additional mixing cvmix_TIDAL --> only in combination with 
     ! KPP+cvmix_TIDAL, PP+cvmix_TIDAL, cvmix_KPP+cvmix_TIDAL, cvmix_PP+cvmix_TIDAL 
     ! or stand alone for debbuging as cvmix_TIDAL   
     elseif (mod(mix_scheme_nmb,10)==7) then
-        call init_cvmix_tidal    
+        call init_cvmix_tidal(mesh)
     end if         
 
     !___________________________________________________________________________
@@ -97,17 +97,17 @@ IMPLICIT NONE
         
 	!if(open_boundary) call set_open_boundary   !TODO
 	
-	call fct_init
-    call muscl_adv_init !!PS test
+	call fct_init(mesh)
+    call muscl_adv_init(mesh) !!PS test
 	!=====================
 	! Initialize fields
 	! A user-defined routine has to be called here!
 	!=====================
     if(toy_ocean) then  
 #ifdef NA_TEST
-        call init_fields_na_test
+        call init_fields_na_test(mesh)
 #else
-        call initial_state_test
+        call initial_state_test(mesh)
 #endif
         !call initial_state_channel_test 
         !call initial_state_channel_narrow_test
@@ -115,9 +115,9 @@ IMPLICIT NONE
         !call init_fields_global_test
     else
 #ifdef NA_TEST
-        call init_fields_na_test
+        call init_fields_na_test(mesh)
 #else
-        call oce_initial_state   ! Use it if not running tests
+        call oce_initial_state(mesh)   ! Use it if not running tests
 #endif
     end if
 
@@ -130,7 +130,7 @@ IMPLICIT NONE
         write(*,*) ' --> call init_thickness_ale'
         write(*,*)
     end if
-    call init_thickness_ale
+    call init_thickness_ale(mesh)
     if(mype==0) write(*,*) 'Initial state'
     if (w_split .and. mype==0) then
         write(*,*) '******************************************************************************'
@@ -142,8 +142,8 @@ end subroutine ocean_setup
 
 !==========================================================
 !
-SUBROUTINE array_setup
-USE o_MESH
+SUBROUTINE array_setup(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -152,10 +152,15 @@ use g_config
 use g_forcing_arrays
 use o_mixing_kpp_mod ! KPP
 USE g_forcing_param, only: use_virt_salt
-use diagnostics,     only: ldiag_dMOC
+use diagnostics,     only: ldiag_dMOC, ldiag_DVD
 IMPLICIT NONE
 integer     :: elem_size, node_size
 integer     :: n
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
+
 elem_size=myDim_elem2D+eDim_elem2D
 node_size=myDim_nod2D+eDim_nod2D
 
@@ -191,6 +196,17 @@ allocate(T_rhs(nl-1, node_size))
 allocate(S_rhs(nl-1, node_size))
 allocate(tr_arr(nl-1,node_size,num_tracers),tr_arr_old(nl-1,node_size,num_tracers))
 allocate(del_ttf(nl-1,node_size))
+allocate(del_ttf_advhoriz(nl-1,node_size),del_ttf_advvert(nl-1,node_size))
+del_ttf          = 0.0_WP
+del_ttf_advhoriz = 0.0_WP
+del_ttf_advvert  = 0.0_WP
+!!PS allocate(del_ttf_diff(nl-1,node_size))
+if (ldiag_DVD) then
+    allocate(tr_dvd_horiz(nl-1,node_size,2),tr_dvd_vert(nl-1,node_size,2))
+    tr_dvd_horiz = 0.0_WP
+    tr_dvd_vert  = 0.0_WP
+end if 
+
 allocate(bvfreq(nl,node_size),mixlay_dep(node_size),bv_ref(node_size))
 ! ================
 ! Ocean forcing arrays
@@ -269,18 +285,19 @@ sw_beta=0.0_WP
 sw_alpha=0.0_WP
 
 if (Fer_GM) then
-   allocate(fer_c(node_size), fer_gamma(2, nl, node_size), fer_K(nl, node_size))
+   allocate(fer_c(node_size),fer_scal(node_size), fer_gamma(2, nl, node_size), fer_K(nl, node_size))
    allocate(fer_wvel(nl, node_size), fer_UV(2, nl-1, elem_size))
    fer_gamma=0.0_WP
    fer_uv=0.0_WP
    fer_wvel=0.0_WP
-   fer_K=500.
-   fer_c=1.
+   fer_K=500._WP
+   fer_c=1._WP
+   fer_scal = 0.0_WP
 end if
 
 if (SPP) then
    allocate(ice_rejected_salt(node_size))
-   ice_rejected_salt=0.
+   ice_rejected_salt=0._WP
 end if
 
 ! =================
@@ -308,8 +325,8 @@ end if
 
     S_rhs=0.0_WP
     water_flux=0.0_WP
-    relax_salt=0.
-    virtual_salt=0.
+    relax_salt=0.0_WP
+    virtual_salt=0.0_WP
 
     Ssurf=0.0_WP
     water_flux_old=0.0_WP !PS
@@ -317,17 +334,17 @@ end if
     
     real_salt_flux=0.0_WP
     
-    tr_arr=0d0
-    tr_arr_old=0d0    
+    tr_arr=0.0_WP
+    tr_arr_old=0.0_WP
 
-    bvfreq=0d0
-    mixlay_dep=0d0
-    bv_ref=0d0
+    bvfreq=0.0_WP
+    mixlay_dep=0.0_WP
+    bv_ref=0.0_WP
 
     MLD1   =0.0_WP
     MLD2   =0.0_WP
-    MLD1_ind=0
-    MLD2_ind=0
+    MLD1_ind=0.0_WP
+    MLD2_ind=0.0_WP
 
     relax2clim=0.0_WP
 
@@ -358,13 +375,12 @@ end if
 !!PS     dum_3d_n = 0.0_WP
 !!PS     dum_2d_e = 0.0_WP
 !!PS     dum_3d_e = 0.0_WP
-    
 END SUBROUTINE array_setup
 !==========================================================================
 ! Here the 3D tracers will be initialized. Initialization strategy depends on a tracer ID.
 ! ID = 0 and 1 are reserved for temperature and salinity
-SUBROUTINE oce_initial_state
-USE o_MESH
+SUBROUTINE oce_initial_state(mesh)
+USE MOD_MESH
 USE o_ARRAYS
 USE g_PARSUP
 USE g_config
@@ -373,21 +389,25 @@ USE g_ic3d
   ! reads the initial state or the restart file for the ocean
   !
   implicit none
-  integer           :: i, k, counter, rcounter3, id
-  character(len=10) :: i_string, id_string
+  integer                  :: i, k, counter, rcounter3, id
+  character(len=10)        :: i_string, id_string
+  type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
 
   if (mype==0) write(*,*) num_tracers, ' tracers will be used in FESOM'
   if (mype==0) write(*,*) 'tracer IDs are: ', tracer_ID(1:num_tracers)
   !
   ! read ocean state
   ! this must be always done! First two tracers with IDs 0 and 1 are the temperature and salinity.
-  if(mype==0) write(*,*) 'read T/S climatology', trim(OceClimaDataName)
-  call do_ic3d
+  if(mype==0) write(*,*) 'read Temperatur climatology from:', trim(filelist(1))
+  if(mype==0) write(*,*) 'read Salt       climatology from:', trim(filelist(2))
+  call do_ic3d(mesh)
   Tclim=tr_arr(:,:,1)
   Sclim=tr_arr(:,:,2)
   Tsurf=tr_arr(1,:,1)
   Ssurf=tr_arr(1,:,2)
-  relax2clim=0.0
+  relax2clim=0.0_WP
 
   ! count the passive tracers which require 3D source (ptracers_restore_total)
   ptracers_restore_total=0
@@ -410,14 +430,14 @@ USE g_ic3d
      id=tracer_ID(i)
      SELECT CASE (id)
        CASE (101)       ! initialize tracer ID=101
-         tr_arr(:,:,i)=0.
+         tr_arr(:,:,i)=0.0_WP
          if (mype==0) then
             write (i_string,  "(I3)") i
             write (id_string, "(I3)") id
             write(*,*) 'initializing '//trim(i_string)//'th tracer with ID='//trim(id_string)
          end if
        CASE (301) !Fram Strait 3d restored passive tracer
-         tr_arr(:,:,i)=0.
+         tr_arr(:,:,i)=0.0_WP
          rcounter3    =rcounter3+1
          counter=0
          do k=1, myDim_nod2D+eDim_nod2D
@@ -509,6 +529,6 @@ USE g_ic3d
          call par_ex
          stop
      END SELECT
-  END DO    
+  END DO
 end subroutine oce_initial_state
 !==========================================================================

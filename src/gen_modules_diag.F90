@@ -1,7 +1,7 @@
 module diagnostics
 
   use g_config
-  use o_mesh
+  use mod_mesh
   use g_parsup
   use g_clock
   use g_comm_auto
@@ -14,9 +14,12 @@ module diagnostics
   implicit none
 
   private
-  public :: compute_diagnostics, ldiag_solver, rhs_diag, lcurt_stress_surf, curl_stress_surf, ldiag_curl_vel3, curl_vel3, ldiag_energy, wrhof, rhof, &
+!!PS   
+  public :: ldiag_solver, lcurt_stress_surf, ldiag_energy, ldiag_dMOC, ldiag_DVD, ldiag_forc, ldiag_salt3D, ldiag_curl_vel3, diag_list, &
+            compute_diagnostics, rhs_diag, curl_stress_surf, curl_vel3, wrhof, rhof, &
             u_x_u, u_x_v, v_x_v, v_x_w, u_x_w, dudx, dudy, dvdx, dvdy, dudz, dvdz, utau_surf, utau_bott, av_dudz_sq, av_dudz, av_dvdz, stress_bott, u_surf, v_surf, u_bott, v_bott, &
-	    ldiag_dMOC, std_dens_min, std_dens_max, std_dens_N, std_dens, std_dens_UVDZ, std_dens_RHOZ
+            std_dens_min, std_dens_max, std_dens_N, std_dens, std_dens_UVDZ, std_dens_RHOZ, &
+            compute_diag_dvd_2ndmoment_klingbeil_etal_2014, compute_diag_dvd_2ndmoment_burchard_etal_2008, compute_diag_dvd
   ! Arrays used for diagnostics, some shall be accessible to the I/O
   ! 1. solver diagnostics: A*x=rhs? 
   ! A=ssh_stiff, x=d_eta, rhs=ssh_rhs; rhs_diag=A*x;
@@ -58,16 +61,27 @@ module diagnostics
   ! this option activates writing the horizintal velocity transports within the density bins (U_rho_x_DZ and V_rho_x_DZ)
   ! an additional field (RHO_Z) will be computed which allows for diagnosing the numerical diapycnal mixing after A. Megann 2018
   logical                                       :: ldiag_dMOC       =.false.
+  
+  ! flag for calculating the Discrete Variance Decay --> estimator for numerical/
+  ! spurious mixing in the advection schemes
+  logical                                       :: ldiag_DVD        =.false.
+  
+  logical                                       :: ldiag_forc       =.false.
+  
+  namelist /diag_list/ ldiag_solver, lcurt_stress_surf, ldiag_curl_vel3, ldiag_energy, &
+                       ldiag_dMOC, ldiag_DVD, ldiag_salt3D, ldiag_forc
+  
   contains
 
 ! ==============================================================
 !rhs_diag=ssh_rhs?
-subroutine diag_solver(mode)
+subroutine diag_solver(mode, mesh)
   implicit none
   integer, intent(in)           :: mode
   integer                       :: n, is, ie
   logical, save                 :: firstcall=.true.
-
+  type(t_mesh), intent(in)     , target :: mesh
+#include "associate_mesh.h"
 !=====================
 
   if (firstcall) then !allocate the stuff at the first call
@@ -84,14 +98,15 @@ subroutine diag_solver(mode)
 end subroutine diag_solver
 ! ==============================================================
 !curt(stress_surf)
-subroutine diag_curl_stress_surf(mode)
+subroutine diag_curl_stress_surf(mode, mesh)
   implicit none
-  integer, intent(in)           :: mode
-  logical, save                 :: firstcall=.true.
-  integer         :: enodes(2), el(2), ed, n
-  real(kind=WP)   :: deltaX1, deltaY1, deltaX2, deltaY2, c1
-
+  integer, intent(in)        :: mode
+  logical, save              :: firstcall=.true.
+  integer                    :: enodes(2), el(2), ed, n
+  real(kind=WP)              :: deltaX1, deltaY1, deltaX2, deltaY2, c1
+  type(t_mesh), intent(in)  , target :: mesh
 !=====================
+#include "associate_mesh.h"
 
   if (firstcall) then  !allocate the stuff at the first call
      allocate(curl_stress_surf(myDim_nod2D+eDim_nod2D))
@@ -125,12 +140,15 @@ subroutine diag_curl_stress_surf(mode)
 end subroutine diag_curl_stress_surf
 ! ==============================================================
 !3D curl(velocity)
-subroutine diag_curl_vel3(mode)
+subroutine diag_curl_vel3(mode, mesh)
   implicit none
-  integer, intent(in)           :: mode
-  logical, save                 :: firstcall=.true.
-  integer         :: enodes(2), el(2), ed, n, nz, nl1, nl2
-  real(kind=WP)   :: deltaX1, deltaY1, deltaX2, deltaY2, c1
+  integer, intent(in)        :: mode
+  logical, save              :: firstcall=.true.
+  integer                    :: enodes(2), el(2), ed, n, nz, nl1, nl2
+  real(kind=WP)              :: deltaX1, deltaY1, deltaX2, deltaY2, c1
+  type(t_mesh), intent(in)  , target :: mesh
+
+#include "associate_mesh.h"
 
 !=====================
   if (firstcall) then  !allocate the stuff at the first call
@@ -175,19 +193,21 @@ subroutine diag_curl_vel3(mode)
       DO nz=1, nlevels_nod2D(n)-1
          curl_vel3(nz,n)=curl_vel3(nz,n)/area(nz,n)
       END DO
-   END DO    
+   END DO
 end subroutine diag_curl_vel3
 ! ==============================================================
 !energy budget
-subroutine diag_energy(mode)
+subroutine diag_energy(mode, mesh)
   implicit none
-  integer, intent(in)           :: mode
-  logical, save                 :: firstcall=.true.
-  integer            :: n, nz, k, i, elem, nzmax, elnodes(3)
-  integer            :: iup, ilo
-  real(kind=WP)      :: ux, vx, uy, vy, tvol, rval(2)
-  real(kind=WP)      :: geo_grad_x(3), geo_grad_y(3), geo_u(3), geo_v(3)
+  integer, intent(in)        :: mode
+  type(t_mesh), intent(in)  , target :: mesh
+  logical, save              :: firstcall=.true.
+  integer                    :: n, nz, k, i, elem, nzmax, elnodes(3)
+  integer                    :: iup, ilo
+  real(kind=WP)              :: ux, vx, uy, vy, tvol, rval(2)
+  real(kind=WP)              :: geo_grad_x(3), geo_grad_y(3), geo_u(3), geo_v(3)
 
+#include "associate_mesh.h"
 !=====================
   if (firstcall) then  !allocate the stuff at the first call
      allocate(wrhof(nl, myDim_nod2D), rhof(nl, myDim_nod2D))
@@ -323,7 +343,7 @@ subroutine diag_energy(mode)
   END DO
 end subroutine diag_energy
 ! ==============================================================
-subroutine diag_densMOC(mode)
+subroutine diag_densMOC(mode, mesh)
   implicit none
   integer, intent(in)                 :: mode
   integer                             :: nz, snz, elem, nzmax, elnodes(3), is, ie, pos
@@ -333,6 +353,9 @@ subroutine diag_densMOC(mode)
   real(kind=WP), save, allocatable    :: dens(:), aux(:)
   real(kind=WP), save, allocatable    :: std_dens_w(:,:)
   logical, save                       :: firstcall=.true.
+  type(t_mesh), intent(in)           , target :: mesh
+
+#include "associate_mesh.h"
 !=====================
 
 
@@ -426,29 +449,231 @@ subroutine diag_densMOC(mode)
   end where
 end subroutine diag_densMOC
 ! ==============================================================
-subroutine compute_diagnostics(mode)
+subroutine compute_diagnostics(mode, mesh)
   implicit none
   integer, intent(in)           :: mode !constructor mode (0=only allocation; any other=do diagnostic)
-  real(kind=WP)                 :: val  
+  real(kind=WP)                 :: val
+  type(t_mesh), intent(in)  , target :: mesh
   !1. solver diagnostic
-  if (ldiag_solver)      call diag_solver(mode)
+  if (ldiag_solver)      call diag_solver(mode, mesh)
   !2. compute curl(stress_surf)
-  if (lcurt_stress_surf) call diag_curl_stress_surf(mode)
+  if (lcurt_stress_surf) call diag_curl_stress_surf(mode, mesh)
   !3. compute curl(velocity)
-  if (ldiag_curl_vel3)   call diag_curl_vel3(mode)
+  if (ldiag_curl_vel3)   call diag_curl_vel3(mode, mesh)
   !4. compute energy budget
-  if (ldiag_energy)      call diag_energy(mode)
+  if (ldiag_energy)      call diag_energy(mode, mesh)
   !5. print integrated temperature 
   if (ldiag_salt3d) then
      if (mod(mstep,logfile_outfreq)==0) then
-        call integrate_nod(tr_arr(:,:,2), val)
+        call integrate_nod(tr_arr(:,:,2), val, mesh)
         if (mype==0) then
            write(*,*) 'total integral of salinity at timestep :', mstep, val
         end if
      end if
   end if
   !6. MOC in density coordinate
-  if (ldiag_dMOC)        call diag_densMOC(mode)
+  if (ldiag_dMOC)        call diag_densMOC(mode, mesh)
 
 end subroutine compute_diagnostics
+
+!
+!
+!_______________________________________________________________________________
+! calculate horizintal and vertical advection for squared tracer (2nd moments)
+! see: 
+! Burchard and Rennau, 2008, Comparative quantification of physically and 
+!                      numerically induced mixing in ocean models ...
+! Rennau, and Burchard, 2009, Quantitative analysis of numerically induced mixing 
+!                      in a coastal model application ...
+! Klingbeil et al., 2014, Quantification of spurious dissipation and mixing – 
+!                      Discrete variance decay in a Finite-Volume framework ...
+subroutine compute_diag_dvd_2ndmoment_burchard_etal_2008(tr_num, mesh)
+    use o_arrays
+    use o_PARAM, only: tracer_adv
+    use g_PARSUP
+    
+    implicit none
+    type(t_mesh), intent(in), target :: mesh
+    integer, intent(in)      :: tr_num 
+    integer                  :: node, nz
+    real(kind=WP)            :: tr_sqr(mesh%nl-1,myDim_nod2D+eDim_nod2D), trAB_sqr(mesh%nl-1,myDim_nod2D+eDim_nod2D)
+
+#include "associate_mesh.h"
+  
+    !___________________________________________________________________________
+    ! square up fields for actual tracers and Adams Bashfort tracer
+    ! --> dont forget to square also the halo !!! --> that why do node = ...+eDim_nod2D
+    tr_sqr   = 0.0_WP
+    trAB_sqr = 0.0_WP
+    do node = 1, myDim_nod2D+eDim_nod2D
+        do nz = 1, nlevels_nod2D(node)-1
+            tr_sqr(nz,node)   = tr_arr(nz,node,tr_num)**2
+            trAB_sqr(nz,node) = tr_arr_old(nz,node,tr_num)**2
+        end do
+    end do
+        
+    !___________________________________________________________________________
+    ! calculate horizintal and vertical advection for squared tracer (2nd moments)
+    ! see Burchard and Rennau, 2008, Comparative quantification of physically and 
+    ! numerically induced mixing in ocean models ...
+    del_ttf_advhoriz = 0.0_WP
+    del_ttf_advvert  = 0.0_WP
+    select case (tracer_adv)
+        case(1) !MUSCL
+            ! --> tr_arr_old ... AB interpolated tracer from call init_tracers_AB(tr_num)
+            call adv_tracers_muscle_ale(trAB_sqr, .25_WP, 1)
+            !                2nd tracer moment is used <--'
+            call adv_tracers_vert_ppm_ale(tr_sqr, 1)
+            !        2nd tracer moment is used <--'
+        case(2) !MUSCL+FCT(3D)
+            call adv_tracer_fct_ale(trAB_sqr,tr_sqr, 1.0_WP, 1)
+            !                   2nd tracer moment is used <--'
+        case default !unknown
+            if (mype==0) write(*,*) 'Unknown ALE advection type. Check your namelists.'
+            call par_ex(1)
+    end select
+
+    !___________________________________________________________________________
+    ! add target second moment to DVD
+    do node = 1,mydim_nod2D
+        do nz = 1,nlevels_nod2D(node)-1
+            ! eq 16 & 17 Klingbeil et al. 2014
+            !
+            ! (phi^2)^(n+1) = 1/V^(n+1)*[ V^(n)*(phi^2)^(n) + dt*ADV[phi^2]  ]
+            !
+            !  DVD = 1/dt * [ (phi^2)^(n+1) -  ( phi^(n+1) )^2 ]
+            !                     |
+            !                     v
+            !                first this part
+            ! --> split it up in DVD contribution from horizontal and vertical 
+            ! advection since for the horizontal advection Adams Bashfort tracer 
+            ! are used and for the vertical the normal tracer values.
+            tr_dvd_horiz(nz,node,tr_num) = hnode(nz,node)/hnode_new(nz,node)*trAB_sqr(nz,node) - del_ttf_advhoriz(nz,node)/hnode_new(nz,node)
+            tr_dvd_vert(nz,node,tr_num)  = hnode(nz,node)/hnode_new(nz,node)*tr_sqr(  nz,node) - del_ttf_advvert( nz,node)/hnode_new(nz,node)
+        end do
+    end do
+end subroutine compute_diag_dvd_2ndmoment_burchard_etal_2008
+!
+!
+!
+!
+!_______________________________________________________________________________
+! calculate horizintal and vertical advection for squared tracer (2nd moments)
+! see: 
+! Klingbeil et al., 2014, Quantification of spurious dissipation and mixing – 
+!                      Discrete variance decay in a Finite-Volume framework ...
+subroutine compute_diag_dvd_2ndmoment_klingbeil_etal_2014(tr_num, mesh)
+    use o_arrays
+    use o_PARAM, only: tracer_adv
+    use g_PARSUP
+    
+    implicit none
+    integer, intent(in)      :: tr_num 
+    integer                  :: node, nz
+    type(t_mesh), intent(in), target :: mesh
+
+#include "associate_mesh.h"
+    !___________________________________________________________________________
+    ! calculate horizintal and vertical advection for squared tracer (2nd moments)
+    ! see Burchard and Rennau, 2008, Comparative quantification of physically and 
+    ! numerically induced mixing in ocean models ...
+    del_ttf_advhoriz = 0.0_WP
+    del_ttf_advvert  = 0.0_WP
+    select case (tracer_adv)
+        case(1) !MUSCL
+            ! --> tr_arr_old ... AB interpolated tracer from call init_tracers_AB(tr_num)
+            call adv_tracers_muscle_ale(tr_arr_old(:,:,tr_num), .25_WP, 2)
+            !                                                      |    | 
+            !             fraction of fourth-order contribution <--'    |
+            !                              2nd tracer moment is used <--'
+            call adv_tracers_vert_ppm_ale(tr_arr(:,:,tr_num), 2)
+            !                                                 | 
+            !                    2nd tracer moment is used <--'
+        case(2) !MUSCL+FCT(3D)
+            call adv_tracer_fct_ale(tr_arr_old(:,:,tr_num),tr_arr(:,:,tr_num), 1.0_WP, 2)
+            !                                                                     |    | 
+            !                            fraction of fourth-order contribution <--'    | 
+            !                                             2nd tracer moment is used <--'
+        case default !unknown
+            if (mype==0) write(*,*) 'Unknown ALE advection type. Check your namelists.'
+            call par_ex(1)
+    end select
+
+    !___________________________________________________________________________
+    ! add target second moment to DVD
+    do node = 1,mydim_nod2D
+        do nz = 1,nlevels_nod2D(node)-1
+            ! eq 23 Klingbeil et al. 2014
+            !
+            ! phi^(n+1) = 1/V^(n+1)*[ V^(n)*phi^(n) + dt*ADV[phi]  ]
+            !
+            !  DVD = -1/dt * [ (phi^(n+1))^2 -  V^n/V^n+1*(phi^n)^2 + dt/V^(n+1)*ADV[phi^2]]
+            !
+            !      = 1/dt * [-(V^n/V^n+1*phi^n - dt/V^(n+1)*ADV[phi])^2 
+            !                + V^n/V^n+1*(phi^n)^2 - dt/V^(n+1)*ADV[phi^2] ]
+            !                  \_________________________________________/
+            !                                      |
+            !                                      v
+            !                                first this part
+            ! --> split it up in DVD contribution from horizontal and vertical 
+            ! advection since for the horizontal advection Adams Bashfort tracer 
+            ! are used and for the vertical the normal tracer values.
+            tr_dvd_horiz(nz,node,tr_num) = hnode(nz,node)/hnode_new(nz,node)*(tr_arr_old(nz,node,tr_num)**2) &
+                                           - del_ttf_advhoriz(nz,node)/hnode_new(nz,node)
+            tr_dvd_vert(nz,node,tr_num)  = hnode(nz,node)/hnode_new(nz,node)*(tr_arr(    nz,node,tr_num)**2) &
+                                           - del_ttf_advvert( nz,node)/hnode_new(nz,node)
+        end do
+    end do
+end subroutine compute_diag_dvd_2ndmoment_klingbeil_etal_2014
+!
+!
+!_______________________________________________________________________________
+! calculate horizintal and vertical advection for squared tracer (2nd moments)
+! see: 
+! Burchard and Rennau, 2008, Comparative quantification of physically and 
+!                      numerically induced mixing in ocean models ...
+! Rennau, and Burchard, 2009, Quantitative analysis of numerically induced mixing 
+!                      in a coastal model application ...
+! Klingbeil et al., 2014, Quantification of spurious dissipation and mixing – 
+!                      Discrete variance decay in a Finite-Volume framework ...
+subroutine compute_diag_dvd(tr_num, mesh)
+    use g_config, only: dt
+    use o_arrays
+    use o_PARAM, only: tracer_adv
+    use g_PARSUP
+    
+    implicit none
+    integer, intent(in)      :: tr_num 
+    integer                  :: node, nz
+    type(t_mesh), intent(in), target :: mesh
+
+#include "associate_mesh.h"
+    !___________________________________________________________________________
+    ! add discret second moment to DVD
+    do node = 1,mydim_nod2D
+        do nz = 1,nlevels_nod2D(node)-1
+            ! eq 16 & 17  and eq 23. Klingbeil et al. 2014
+            !
+            ! (phi^2)^(n+1) = 1/V^(n+1)*[ V^(n)*(phi^2)^(n) + dt*ADV[phi^2]  ]
+            !
+            !  DVD = 1/dt * [ (phi^2)^(n+1) -  ( phi^(n+1) )^2 ]
+            !                                         |
+            !                                         v
+            !                                    now add this part
+            ! --> tr_dvd_horiz contains already the expected target second moments
+            ! from subroutine compute_diag_dvd_2ndmoment
+            tr_dvd_horiz(nz,node,tr_num) = (tr_dvd_horiz(nz,node,tr_num)                                    & 
+                                            -( hnode(nz,node)/hnode_new(nz,node)*tr_arr_old(nz,node,tr_num) &
+                                              -del_ttf_advhoriz(nz,node)/hnode_new(nz,node)                 &
+                                              )**2                                                          &
+                                            )/dt
+            tr_dvd_vert(nz,node,tr_num)  = (tr_dvd_vert(nz,node,tr_num)                                     &
+                                            -( hnode(nz,node)/hnode_new(nz,node)*tr_arr(    nz,node,tr_num) &
+                                              -del_ttf_advvert( nz,node)/hnode_new(nz,node)                 &
+                                              )**2                                                          &
+                                            )/dt
+        end do
+    end do
+end subroutine compute_diag_dvd
+
 end module diagnostics

@@ -58,8 +58,8 @@ class clim_data(object):
         self.depth = np.copy(ncid.variables['depth'][:])
         #______________________________________________________________________#
         # load WOA 2005 data
-        if self.fname=='woa2005TS.nc':
-            self.descript = 'WOA2005'
+        if 'woa' in self.fname:
+            self.descript = 'WOA'
             valueT= np.copy(ncid.variables['t00an1'][:,:,:,:]).squeeze()
             valueS= np.copy(ncid.variables['s00an1'][:,:,:,:]).squeeze()
         elif self.fname=='phc3.0_annual.nc':
@@ -75,8 +75,9 @@ class clim_data(object):
         
         #__________________________________________________________________#
         # shift coordinates from 0...360 --> -180...180
-        valueT, dum      = shiftgrid(180.0,valueT, self.lon,start=False,cyclic=359)
-        valueS, self.lon = shiftgrid(180.0,valueS, self.lon,start=False,cyclic=359)
+        if self.lon.max()>180:
+            valueT, dum      = shiftgrid(180.0,valueT, self.lon,start=False,cyclic=359)
+            valueS, self.lon = shiftgrid(180.0,valueS, self.lon,start=False,cyclic=359)
         
         #__________________________________________________________________#
         # calculate potential temperature
@@ -108,8 +109,9 @@ def clim_load_data(data):
     
     #______________________________________________________________________#
     # load WOA 2005 data
-    if data.fname=='woa2005TS.nc':
-        data.descript = 'WOA2005'
+    if 'woa' in data.fname:
+        if '2005' in data.fname: data.descript = 'WOA05'
+        if '2018' in data.fname: data.descript = 'WOA18'
         valueT= np.copy(ncid.variables['t00an1'][:,:,:,:]).squeeze()
         valueS= np.copy(ncid.variables['s00an1'][:,:,:,:]).squeeze()
     elif data.fname=='phc3.0_annual.nc':
@@ -125,8 +127,9 @@ def clim_load_data(data):
     
     #__________________________________________________________________#
     # shift coordinates from 0...360 --> -180...180
-    valueT, dum      = shiftgrid(180.0,valueT, data.lon,start=False,cyclic=359)
-    valueS, data.lon = shiftgrid(180.0,valueS, data.lon,start=False,cyclic=359)
+    if data.lon.max()>180:
+        valueT, dum      = shiftgrid(180.0,valueT, data.lon,start=False,cyclic=359)
+        valueS, data.lon = shiftgrid(180.0,valueS, data.lon,start=False,cyclic=359)
     
     #__________________________________________________________________#
     # calculate potential temperature
@@ -184,14 +187,19 @@ def clim_vinterp(data_in,levels):
 #___DO VERTICAL INTERPOLATE AVERAGE OVER CERTAIN LAYERS_________________________
 #
 #_______________________________________________________________________________
-def clim_plot_anom(clim,figsize=[]):
+def clim_plot_anom(clim,figsize=[],do_subplot=[]):
     from set_inputarray import inputarray
     
     if len(figsize)==0 : figsize=[12,8]
     #___________________________________________________________________________
-    fig = plt.figure(figsize=figsize)
-    #fig.patch.set_alpha(0.0)
-    ax  = plt.gca()
+    # plot is not part of subplot
+    if len(do_subplot)==0:
+        fig = plt.figure(figsize=figsize)
+        ax  = plt.gca()
+    else:
+        fig=do_subplot[0]
+        ax =do_subplot[1]
+        fig.sca(ax)
     resolution = 'c'
     fsize = 12
     #+_________________________________________________________________________+
@@ -360,11 +368,28 @@ def clim_plot_anom(clim,figsize=[]):
     nstep = np.int(np.floor(nstep))
     if nstep==0: nstep=1
    
-    plt.setp(cbar.ax.get_yticklabels()[:], visible=False)
-    #plt.setp(cbar.ax.get_yticklabels()[::nstep], visible=True)
-    plt.setp(cbar.ax.get_yticklabels()[idx_cref::nstep], visible=True)
-    plt.setp(cbar.ax.get_yticklabels()[idx_cref::-nstep], visible=True)
+    #plt.setp(cbar.ax.get_yticklabels()[:], visible=False)
+    ##plt.setp(cbar.ax.get_yticklabels()[::nstep], visible=True)
+    #plt.setp(cbar.ax.get_yticklabels()[idx_cref::nstep], visible=True)
+    #plt.setp(cbar.ax.get_yticklabels()[idx_cref::-nstep], visible=True)
+    fig.canvas.draw() # this is need so cbar.ax.get_yticklabels() always finds the labels
+    if cbar.orientation=='vertical':
+        tickl = cbar.ax.get_yticklabels()
+    else:
+        tickl = cbar.ax.get_xticklabels()
     
+    idx = np.arange(0,len(tickl),1)
+    idxb = np.ones((len(tickl),), dtype=bool)                
+    idxb[idx_cref::nstep]  = False
+    idxb[idx_cref::-nstep] = False
+    idx = idx[idxb==True]
+    for ii in list(idx):
+        tickl[ii]=''
+    if cbar.orientation=='vertical':    
+        cbar.ax.set_yticklabels(tickl)
+    else:    
+        cbar.ax.set_xticklabels(tickl)
+        
     #______________________________________________________________________________+
     ax.tick_params(axis='both', direction='out')
     ax.get_xaxis().tick_bottom()   # remove unneeded ticks 

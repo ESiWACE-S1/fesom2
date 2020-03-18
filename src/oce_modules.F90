@@ -47,12 +47,17 @@ real(kind=WP)                 :: clim_decay, clim_growth
 logical                       :: ref_sss_local=.false.
 real(kind=WP)                 :: ref_sss=34.7
 logical                       :: Fer_GM =.false.  !flag for Ferrari et al. (2010) GM scheme
-real(kind=WP)                 :: K_GM=1000.
-logical			      :: scaling_Ferreira   =.true.
-logical			      :: scaling_Rossby     =.false. 
-logical			      :: scaling_resolution =.true.
-logical			      :: scaling_FESOM14    =.false.
-logical			      :: Redi               =.false.  !flag for Redi scheme
+real(kind=WP)                 :: K_GM_max = 3000.
+real(kind=WP)                 :: K_GM_min = 2.0
+integer                       :: K_GM_bvref = 2 ! 0...surface, 1...bottom mixlay, 2...mean over mixlay
+real(kind=WP)                 :: K_GM_resscalorder = 2.0 
+real(kind=WP)                 :: K_GM_rampmax = 40.0 ! Resol >K_GM_rampmax[km] GM full
+real(kind=WP)                 :: K_GM_rampmin = 30.0 ! Resol <K_GM_rampmin[km] GM off
+logical                       :: scaling_Ferreira   =.true.
+logical                       :: scaling_Rossby     =.false. 
+logical                       :: scaling_resolution =.true.
+logical                       :: scaling_FESOM14    =.false.
+logical                       :: Redi               =.false.  !flag for Redi scheme
 
 real(kind=WP)                 :: visc_sh_limit=5.0e-3      !for KPP, max visc due to shear instability
 real(kind=WP)                 :: diff_sh_limit=5.0e-3      !for KPP, max diff due to shear instability
@@ -130,8 +135,10 @@ character(20)                  :: which_pgf='shchepetkin'
 
  NAMELIST /oce_dyn/ C_d, A_ver, laplacian, A_hor, A_hor_max, Leith_c, tau_c, Div_c, Smag_c, &
                     biharmonic, Abh0, scale_area, mom_adv, free_slip, i_vert_visc, w_split, w_exp_max, SPP,&
-                    Fer_GM, K_GM, scaling_Ferreira, scaling_Rossby, scaling_resolution, scaling_FESOM14, Redi, &
-                    visc_sh_limit, mix_scheme, Ricr, concv, which_pgf, visc_option, easy_bs_scale, easy_bs_return
+                    Fer_GM, K_GM_max, K_GM_min, K_GM_bvref, K_GM_resscalorder, K_GM_rampmax, K_GM_rampmin, & 
+                    scaling_Ferreira, scaling_Rossby, scaling_resolution, scaling_FESOM14, & 
+                    Redi, visc_sh_limit, mix_scheme, Ricr, concv, which_pgf, easy_bs_scale, easy_bs_return, visc_option
+
  NAMELIST /oce_tra/ diff_sh_limit, Kv0_const, double_diffusion, K_ver, K_hor, surf_relax_T, surf_relax_S, balance_salt_water, clim_relax, &
 		    ref_sss_local, ref_sss, i_vert_diff, tracer_adv, num_tracers, tracer_ID
 END MODULE o_PARAM  
@@ -144,86 +151,6 @@ USE, intrinsic :: ISO_FORTRAN_ENV
 ! All variables used to keep the mesh structure +
 ! auxiliary variables involved in implementation 
 ! of open boundaries and advection schemes
-! 
-
-integer, parameter                         :: MAX_ADJACENT=32 ! Max allowed number of adjacent nodes
-integer                                    ::   nod2D      ! the number of 2D nodes
-real(kind=WP)                              ::   ocean_area
-real(kind=WP), allocatable, dimension(:,:) ::   coord_nod2D, geo_coord_nod2D
-integer                                    ::   edge2D     ! the number of 2D edges
-integer                                    ::   edge2D_in  
-                                              ! the number of internal 2D edges
-integer                                    ::   elem2D     ! the number of 2D elements
-integer, allocatable, dimension(:,:)       ::   elem2D_nodes
-                                              ! elem2D_nodes(:,n) lists
-				              ! 3 nodes of element n   
-integer, allocatable, dimension(:,:)       ::   edges
-                                              ! edge(:,n) lists 2 nodes
-				              ! edge n
-integer, allocatable, dimension(:,:)       ::   edge_tri
-                                              ! edge_tri(:,n) lists 2 
-				              ! elements containing edge n
-				              ! The first one is to left 
-				              ! of the line directed
-				              ! to the second node
-integer, allocatable, dimension(:,:)       ::   elem_edges
-                                              ! elem_edges(:,n) are edges of 
-                                              ! element n.  
-real(kind=WP), allocatable, dimension(:)   ::   elem_area
-real(kind=WP), allocatable, dimension(:,:) ::   edge_dxdy, edge_cross_dxdy
-real(kind=WP), allocatable, dimension(:)   ::   elem_cos, metric_factor
-integer,allocatable,dimension(:,:)         ::   elem_neighbors
-integer,allocatable,dimension(:,:)         ::   nod_in_elem2D
-real(kind=WP),allocatable,dimension(:,:)   ::   x_corners, y_corners ! cornes for the scalar points
-integer,allocatable,dimension(:)           ::   nod_in_elem2D_num
-real(kind=WP),allocatable,dimension(:)     ::   depth
-                                              ! depth(n) is the depths at 
-				              ! node n 
-real(kind=WP),allocatable,dimension(:,:)    ::   gradient_vec 
-                                              ! Coefficients of linear reconstruction
-					      ! of velocities on elements
-real(kind=WP),allocatable,dimension(:,:)    ::   gradient_sca
-                                              ! Coefficients to compute
-					      ! gradient of scalars on elements
-INTEGER,       ALLOCATABLE, DIMENSION(:)    :: bc_index_nod2D(:)
-! Vertical structure             
-integer                                    :: nl
-real(kind=WP), allocatable, dimension(:)    :: zbar, Z,elem_depth
-integer, allocatable, dimension(:)         :: nlevels, nlevels_nod2D
-real(kind=WP), allocatable, dimension(:,:)  :: area, area_inv
-real(kind=WP), allocatable, dimension(:)   :: mesh_resolution
-
-
-  type sparse_matrix 
-     integer :: nza
-     integer :: dim
-     real(kind=WP), allocatable, dimension(:)      :: values
-     integer(int32), allocatable,   dimension(:) :: colind
-     integer(int32), allocatable,   dimension(:) :: rowptr
-     integer(int32), allocatable,   dimension(:) :: colind_loc
-     integer(int32), allocatable,   dimension(:) :: rowptr_loc
-  end type sparse_matrix
-! Elevation stiffness matrix
-type(sparse_matrix)                           :: ssh_stiff
-
-! Auxiliary arrays. They are not related to mesh structure, but are 
-! kept here because they are just used for temporary storage in computations
-
-! Open boundary:
-integer                                       :: ob_num  ! number of OB fragments
-
-TYPE ob_type
-    integer      :: len
-    integer, allocatable, dimension(:)       :: list
-END TYPE ob_type
-
-TYPE ob_rhs_type
-    integer      :: len
-    real(kind=WP), allocatable, dimension(:) :: list
-END TYPE ob_rhs_type
-
-type(ob_type), allocatable                    ::  ob_info(:)
-type(ob_rhs_type), allocatable                ::  ob_2rhs(:)
 !
 ! The fct part
 integer                                       :: fct_iter=1
@@ -240,11 +167,6 @@ integer,allocatable,dimension(:,:)            :: nn_pos
 ! MUSCL type reconstruction
 integer,allocatable,dimension(:,:)            :: edge_up_dn_tri
 real(kind=WP),allocatable,dimension(:,:,:)    :: edge_up_dn_grad
-
-#if defined (__oasis)
-  real(kind=WP), allocatable, dimension(:)      :: lump2d_south, lump2d_north  
-  integer, allocatable, dimension(:)           :: ind_south, ind_north    
-#endif  
 end module o_MESH
 !==========================================================
 
@@ -266,6 +188,7 @@ real(kind=WP), allocatable    :: heat_flux_old(:), Tsurf_old(:)  !PS
 real(kind=WP), allocatable    :: S_rhs(:,:)
 real(kind=WP), allocatable    :: tr_arr(:,:,:),tr_arr_old(:,:,:)
 real(kind=WP), allocatable    :: del_ttf(:,:)
+real(kind=WP), allocatable    :: del_ttf_advhoriz(:,:),del_ttf_advvert(:,:) !!PS ,del_ttf_diff(:,:)
 
 real(kind=WP), allocatable    :: water_flux(:), Ssurf(:)
 real(kind=WP), allocatable    :: virtual_salt(:), relax_salt(:)
@@ -360,8 +283,13 @@ real(kind=WP),allocatable :: mo(:,:),mixlength(:)
 real(kind=WP),allocatable :: bvfreq(:,:),mixlay_dep(:),bv_ref(:)
 
 real(kind=WP),         allocatable    :: fer_UV(:,:,:), fer_wvel(:,:)
-real(kind=WP), target, allocatable    :: fer_c(:), fer_K(:,:), fer_gamma(:,:,:)
+real(kind=WP), target, allocatable    :: fer_c(:), fer_scal(:), fer_K(:,:), fer_gamma(:,:,:)
 
 real(kind=WP),         allocatable    :: ice_rejected_salt(:)
+
+!_______________________________________________________________________________
+! in case ldiag_DVD=.true. --> calculate discrete variance decay (DVD)
+real(kind=WP), allocatable    :: tr_dvd_horiz(:,:,:),tr_dvd_vert(:,:,:)
+
 END MODULE o_ARRAYS
 !==========================================================

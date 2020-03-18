@@ -15,8 +15,9 @@
 !	find_up_downwind_triangles
 !	fill_up_dn_grad
 !	adv_tracer_muscl
-subroutine muscl_adv_init
-    use o_MESH
+subroutine muscl_adv_init(mesh)
+    use MOD_MESH
+    use O_MESH
     use o_ARRAYS
     use o_PARAM
     use g_PARSUP
@@ -25,9 +26,13 @@ subroutine muscl_adv_init
     IMPLICIT NONE
     integer     :: n, k, n1, n2, n_num
     integer     :: nz
+    type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
     !___________________________________________________________________________
     ! find upwind and downwind triangle for each local edge 
-    call find_up_downwind_triangles
+    call find_up_downwind_triangles(mesh)
     
     !___________________________________________________________________________
     n_num=0
@@ -96,11 +101,12 @@ subroutine muscl_adv_init
         nlevels_nod2D_min(n)=minval(nlevels(nod_in_elem2D(1:k, n)))
     end do
     call exchange_nod(nlevels_nod2D_min)
-    
+
 end SUBROUTINE muscl_adv_init
 !=======================================================================
-SUBROUTINE find_up_downwind_triangles
-USE o_MESH
+SUBROUTINE find_up_downwind_triangles(mesh)
+USE MOD_MESH
+USE O_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
@@ -111,6 +117,9 @@ integer                    :: n, k, ednodes(2), elem, el
 real(kind=WP)              :: x(2),b(2), c(2), cr, bx, by, xx, xy, ab, ax
 real(kind=WP), allocatable :: coord_elem(:, :,:), temp(:)
 integer, allocatable       :: temp_i(:), e_nodes(:,:)
+
+type(t_mesh), intent(in)   , target :: mesh
+#include "associate_mesh.h"
 
 allocate(edge_up_dn_tri(2,myDim_edge2D))
 allocate(edge_up_dn_grad(4,nl-1,myDim_edge2D))
@@ -147,8 +156,8 @@ deallocate(temp_i)
 DO n=1, myDim_edge2d
    ednodes=edges(:,n) 
    x=coord_nod2D(:,ednodes(2))-coord_nod2D(:,ednodes(1))
-      	 if(x(1)>cyclic_length/2.) x(1)=x(1)-cyclic_length
-         if(x(1)<-cyclic_length/2.) x(1)=x(1)+cyclic_length
+      	 if(x(1)>cyclic_length/2._WP) x(1)=x(1)-cyclic_length
+         if(x(1)<-cyclic_length/2._WP) x(1)=x(1)+cyclic_length
 	
    ! Find upwind (in the sense of x) triangle, i. e. 
    ! find which triangle contains -x:
@@ -165,10 +174,10 @@ DO n=1, myDim_edge2d
 	 b=coord_elem(:,1,elem)-coord_elem(:,3,elem)
 	 c=coord_elem(:,2,elem)-coord_elem(:,3,elem)
       end if
-      	 if(b(1)>cyclic_length/2.) b(1)=b(1)-cyclic_length
-         if(b(1)<-cyclic_length/2.) b(1)=b(1)+cyclic_length
-	 if(c(1)>cyclic_length/2.) c(1)=c(1)-cyclic_length
-         if(c(1)<-cyclic_length/2.) c(1)=c(1)+cyclic_length
+      	 if(b(1)>cyclic_length/2._WP) b(1)=b(1)-cyclic_length
+         if(b(1)<-cyclic_length/2._WP) b(1)=b(1)+cyclic_length
+	 if(c(1)>cyclic_length/2._WP) c(1)=c(1)-cyclic_length
+         if(c(1)<-cyclic_length/2._WP) c(1)=c(1)+cyclic_length
       ! the vector x has to be between b and c
       ! Decompose b and x into parts along c and along (-cy,cx), i.e.
       ! 90 degree counterclockwise
@@ -181,15 +190,15 @@ DO n=1, myDim_edge2d
       ax=atan2(xy,xx)
       ! Since b and c are the sides of triangle, |ab|<pi, and atan2 should 
       ! be what is needed
-      if((ab>0).and.(ax>0).and.(ax<ab)) then
+      if((ab>0.0_WP).and.(ax>0.0_WP).and.(ax<ab)) then
       edge_up_dn_tri(1,n)=elem
       cycle
       endif
-      if((ab<0).and.(ax<0).and.(ax>ab)) then
+      if((ab<0.0_WP).and.(ax<0.0_WP).and.(ax>ab)) then
       edge_up_dn_tri(1,n)=elem
       cycle
       endif
-      if((ab==ax).or.(ax==0.0)) then
+      if((ab==ax).or.(ax==0.0_WP)) then
       edge_up_dn_tri(1,n)=elem
       cycle
       endif
@@ -224,11 +233,11 @@ END DO
       ax=atan2(xy,xx)
       ! Since b and c are the sides of triangle, |ab|<pi, and atan2 should 
       ! be what is needed
-      if((ab>0).and.(ax>0).and.(ax<ab)) then
+      if((ab>0.0_WP).and.(ax>0.0_WP).and.(ax<ab)) then
       edge_up_dn_tri(2,n)=elem
       cycle
       endif
-      if((ab<0).and.(ax<0).and.(ax>ab)) then
+      if((ab<0.0_WP).and.(ax<0.0_WP).and.(ax>ab)) then
       edge_up_dn_tri(2,n)=elem
       cycle
       endif
@@ -250,26 +259,32 @@ END DO
 deallocate(e_nodes, coord_elem)
 
 
-edge_up_dn_grad=0.0
+edge_up_dn_grad=0.0_WP
+
 end SUBROUTINE find_up_downwind_triangles
 !=======================================================================
-SUBROUTINE fill_up_dn_grad
+SUBROUTINE fill_up_dn_grad(mesh)
 
 ! ttx, tty  elemental gradient of tracer 
 USE o_PARAM
-USE o_MESH
+USE MOD_MESH
+USE O_MESH
 USE o_ARRAYS
 USE g_PARSUP
 IMPLICIT NONE
-integer        :: n, nz, elem, k, edge, ednodes(2)
-real(kind=WP)  :: tvol, tx, ty
+integer                  :: n, nz, elem, k, edge, ednodes(2)
+real(kind=WP)            :: tvol, tx, ty
+type(t_mesh), intent(in) , target :: mesh
+
+#include "associate_mesh.h"
+
 	!___________________________________________________________________________
 	! loop over edge segments
 	DO edge=1,myDim_edge2D
 		ednodes=edges(:,edge)
 		!_______________________________________________________________________
 		! case when edge has upwind and downwind triangle on the surface
-		if((edge_up_dn_tri(1,edge).ne.0).and.(edge_up_dn_tri(2,edge).ne.0)) then
+		if((edge_up_dn_tri(1,edge).ne.0.0_WP).and.(edge_up_dn_tri(2,edge).ne.0.0_WP)) then
 			
 			!___________________________________________________________________
 			! loop over shared depth levels
@@ -283,9 +298,9 @@ real(kind=WP)  :: tvol, tx, ty
 			!___________________________________________________________________
 			! loop over not shared depth levels of edge node 1 (ednodes(1))
 			DO nz=minval(nlevels_nod2D_min(ednodes)),nlevels_nod2D(ednodes(1))-1
-				tvol=0.0
-				tx=0.0
-				ty=0.0
+				tvol=0.0_WP
+				tx=0.0_WP
+				ty=0.0_WP
 				! loop over number triangles that share the nodeedge points ednodes(1)
 				! --> calculate mean gradient at ednodes(1) over the sorounding 
 				!     triangle gradients
@@ -302,9 +317,9 @@ real(kind=WP)  :: tvol, tx, ty
 			!___________________________________________________________________
 			! loop over not shared depth levels of edge node 2 (ednodes(2))
 			DO nz=minval(nlevels_nod2D_min(ednodes)),nlevels_nod2D(ednodes(2))-1
-				tvol=0.0
-				tx=0.0
-				ty=0.0
+				tvol=0.0_WP
+				tx=0.0_WP
+				ty=0.0_WP
 				! loop over number triangles that share the nodeedge points ednodes(2)
 				! --> calculate mean gradient at ednodes(2) over the sorounding 
 				!     triangle gradients
@@ -324,9 +339,9 @@ real(kind=WP)  :: tvol, tx, ty
 		else
 			! Only linear reconstruction part
 			DO nz=1,nlevels_nod2D(ednodes(1))-1
-				tvol=0.0
-				tx=0.0
-				ty=0.0
+				tvol=0.0_WP
+				tx=0.0_WP
+				ty=0.0_WP
 				DO k=1, nod_in_elem2D_num(ednodes(1))
 					elem=nod_in_elem2D(k,ednodes(1))
 					if(nlevels(elem)-1 < nz) cycle
@@ -338,9 +353,9 @@ real(kind=WP)  :: tvol, tx, ty
 				edge_up_dn_grad(3,nz,edge)=ty/tvol
 			END DO
 			DO nz=1,nlevels_nod2D(ednodes(2))-1
-				tvol=0.0
-				tx=0.0
-				ty=0.0
+				tvol=0.0_WP
+				tx=0.0_WP
+				ty=0.0_WP
 				DO k=1, nod_in_elem2D_num(ednodes(2))
 					elem=nod_in_elem2D(k,ednodes(2))
 					if(nlevels(elem)-1 < nz) cycle
@@ -353,35 +368,39 @@ real(kind=WP)  :: tvol, tx, ty
 			END DO
 		end if  
 	END DO 
-   
+
 END SUBROUTINE fill_up_dn_grad
 !===========================================================================
 ! It is assumed that velocity is at n+1/2, hence only tracer field 
 ! is AB2 interpolated to n+1/2. 
-SUBROUTINE adv_tracer_muscl(ttf, dttf, ttfold)
-USE o_MESH
+SUBROUTINE adv_tracer_muscl(ttf, dttf, ttfold, mesh)
+USE MOD_MESH
+USE O_MESH
 USE o_ARRAYS
 USE o_PARAM
 USE g_PARSUP
 USE g_CONFIG
 use g_comm_auto
 IMPLICIT NONE
+ type(t_mesh), intent(in) , target :: mesh
  integer      :: el(2), enodes(2), n, nz, edge
  integer      :: nl1, nl2,tr_num
  real(kind=WP):: c1, c2, deltaX1, deltaY1, deltaX2, deltaY2, flux=0.0 
- real(kind=WP):: tvert(nl), a, b, c, d, da, db, dg
+ real(kind=WP):: tvert(mesh%nl), a, b, c, d, da, db, dg
  real(kind=WP):: Tx, Ty, Tmean, rdata=0.0
- real(kind=WP):: ttf(nl-1, myDim_nod2D+eDim_nod2D), dttf(nl-1, myDim_nod2D+eDim_nod2D)
- real(kind=WP):: ttfold(nl-1, myDim_nod2D+eDim_nod2D)
+ real(kind=WP):: ttf(mesh%nl-1, myDim_nod2D+eDim_nod2D), dttf(mesh%nl-1, myDim_nod2D+eDim_nod2D)
+ real(kind=WP):: ttfold(mesh%nl-1, myDim_nod2D+eDim_nod2D)
+ 
+#include "associate_mesh.h"
 
 ! Clean the rhs
-ttrhs=0d0  
+ttrhs=0.0_WP  
 ! Horizontal advection
   DO edge=1, myDim_edge2D
    enodes=edges(:,edge)   
    el=edge_tri(:,edge)
-   c1=0.0
-   c2=0.0
+   c1=0.0_WP
+   c2=0.0_WP
    nl1=nlevels(el(1))-1
    deltaX1=edge_cross_dxdy(1,edge)
    deltaY1=edge_cross_dxdy(2,edge)
@@ -456,7 +475,7 @@ ttrhs=0d0
    tvert(1)= -Wvel(1,n)*ttfold(1,n)*area(1,n)
 		    
   ! Bottom conditions	  
-   tvert(nlevels_nod2D(n))=0.	    
+   tvert(nlevels_nod2D(n))=0.0_WP	    
   
    DO nz=2, nlevels_nod2D(n)-1
       ! ============
@@ -473,7 +492,7 @@ ttrhs=0d0
 	c=zbar(nz)-Z(nz+1)
 	dg=a*b/(c+a)/(b-c)
 	db=-a*c/(b+a)/(b-c)
-	da=1.0-dg-db
+	da=1.0_WP-dg-db
 	Tmean=ttfold(nz-1,n)*da+ttfold(nz,n)*db+ttfold(nz+1,n)*dg
 	end if
       end if
@@ -487,7 +506,7 @@ ttrhs=0d0
 	c=Z(nz-2)-zbar(nz)
 	dg=a*b/(c+a)/(b-c)
 	db=-a*c/(b+a)/(b-c)
-	da=1.0-dg-db
+	da=1.0_WP-dg-db
 	Tmean=ttfold(nz,n)*da+ttfold(nz-1,n)*db+ttfold(nz-2,n)*dg
 	end if
       end if
@@ -511,6 +530,7 @@ ttrhs=0d0
         dttf(nz,n)=dttf(nz,n)+ttrhs(nz,n)*dt/area(nz,n)
      END DO
   END DO
+
 end subroutine adv_tracer_muscl
 
 !===========================================================================
