@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=fesom2.0
-#SBATCH -p mpp
 #SBATCH --ntasks=288
 #SBATCH --time=00:05:00
 #SBATCH -o slurm-out.out
