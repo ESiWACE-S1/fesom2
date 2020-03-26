@@ -1,7 +1,7 @@
 # Loading modules
 module load pre2019
 module load pgi/20.1
-mpi/openmpi/3.0.0-cuda9-pgi17
+module load mpi/openmpi/3.0.0-cuda9-pgi17
 # Compilers
 export FC="mpifort" CC="mpicc" CXX="mpic++"
 # Libraries
