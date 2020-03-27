@@ -44,6 +44,9 @@ elif [[  $LOGINHOST = cartesius ]]; then
 elif [[  $LOGINHOST = cartesius_gcc ]]; then
    # This strategy can only be activated with a command line parameter
    STRATEGY="cartesius_gcc"
+elif [[  $LOGINHOST = cartesius_pgi ]]; then
+   # This strategy can only be activated with a command line parameter
+   STRATEGY="cartesius_pgi"
 elif [[  $LOGINHOST = bsc ]]; then
    STRATEGY="bsc"
 elif [[  $LOGINHOST =~ ^juwels[0-9]+\.fz\-juelich\.de$ ]]; then
