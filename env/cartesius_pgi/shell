@@ -11,5 +11,6 @@ export NETCDF_Fortran_INCLUDE_DIRECTORIES=${HOME}/.local/include
 export UBUNTU_BLAS_LIBRARY="libopenblas.a"
 # Paths
 export LD_LIBRARY_PATH="${HOME}/.local/lib:${LD_LIBRARY_PATH}"
-export INCLUDE="${HOME}/.local/include:${INCLUDE}"
+export C_INCLUDE_PATH="${HOME}/.local/include:${C_INCLUDE_PATH}"
+export CPLUS_INCLUDE_PATH="${HOME}/.local/include:${CPLUS_INCLUDE_PATH}"
 export PATH="${HOME}/.local/bin:${PATH}"
