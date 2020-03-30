@@ -1677,13 +1677,13 @@ subroutine vert_vel_ale(mesh)
             do nz=1,nlevels_nod2D(n)-1
                 !!PS if (abs(CFL_z(nz,n)-cflmax) < 1.e-12) then
                 if (abs(CFL_z(nz,n)-cflmax) < 1.e-12 .and. CFL_z(nz,n) > 1.0_WP .and. CFL_z(nz,n)<=2.0_WP ) then
-                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[33m'//' --> WARNING CFLz>1:'//achar(27)//'[0m',&
-                          'CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',geo_coord_nod2D(2,n)/rad,&
-                          ',nz=',nz
+                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[33m'//' --> WARNING CFLz>1:'//achar(27)//&
+                          '[0m','CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/'&
+                          ,geo_coord_nod2D(2,n)/rad,',nz=',nz
                 elseif (abs(CFL_z(nz,n)-cflmax) < 1.e-12 .and. CFL_z(nz,n) > 2.0_WP) then          
-                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[31m'//' --> WARNING CFLz>1:'//achar(27)//'[0m',&
-                          'CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',geo_coord_nod2D(2,n)/rad,&
-                          ',nz=',nz
+                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[31m'//' --> WARNING CFLz>1:'//achar(27)//&
+                          '[0m','CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',&
+                          geo_coord_nod2D(2,n)/rad,',nz=',nz
                     !!PS write(*,*) '***********************************************************'
                     !!PS write(*,*) 'max. CFL_z = ', cflmax, ' mype = ', mype
                     !!PS write(*,*) 'mstep      = ', mstep

@@ -139,8 +139,9 @@ character(20)                  :: which_pgf='shchepetkin'
                     scaling_Ferreira, scaling_Rossby, scaling_resolution, scaling_FESOM14, & 
                     Redi, visc_sh_limit, mix_scheme, Ricr, concv, which_pgf, easy_bs_scale, easy_bs_return, visc_option
 
- NAMELIST /oce_tra/ diff_sh_limit, Kv0_const, double_diffusion, K_ver, K_hor, surf_relax_T, surf_relax_S, balance_salt_water, clim_relax, &
-		    ref_sss_local, ref_sss, i_vert_diff, tracer_adv, num_tracers, tracer_ID
+ NAMELIST /oce_tra/ diff_sh_limit, Kv0_const, double_diffusion, K_ver, K_hor, surf_relax_T, surf_relax_S, &
+                    balance_salt_water, clim_relax, ref_sss_local, ref_sss, i_vert_diff, tracer_adv, num_tracers, &
+                    tracer_ID
 END MODULE o_PARAM  
 !==========================================================
 

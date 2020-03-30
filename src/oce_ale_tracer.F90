@@ -186,7 +186,8 @@ subroutine adv_tracers_ale(tr_num, mesh)
     ! if ldiag_DVD=.true. --> compute tracer second moments for the calcualtion 
     ! of discret variance decay
     if (ldiag_DVD .and. tr_num <= 2) then
-        if (flag_debug .and. mype==0)  print *, achar(27)//'[38m'//'             --> call compute_diag_dvd_2ndmoment'//achar(27)//'[0m'
+        if (flag_debug .and. mype==0)  &
+            print *, achar(27)//'[38m'//'             --> call compute_diag_dvd_2ndmoment'//achar(27)//'[0m'
         call compute_diag_dvd_2ndmoment_klingbeil_etal_2014(tr_num, mesh)
         !!PS call compute_diag_dvd_2ndmoment_burchard_etal_2008(tr_num)
     end if    
@@ -199,19 +200,22 @@ subroutine adv_tracers_ale(tr_num, mesh)
     select case (tracer_adv)
         case(1) !MUSCL
             ! --> tr_arr_old ... AB interpolated tracer from call init_tracers_AB(tr_num)
-            if (flag_debug .and. mype==0)  print *, achar(27)//'[38m'//'             --> call adv_tracers_muscle_ale'//achar(27)//'[0m'
+            if (flag_debug .and. mype==0)  &
+                print *, achar(27)//'[38m'//'             --> call adv_tracers_muscle_ale'//achar(27)//'[0m'
             call adv_tracers_muscle_ale(tr_arr_old(:,:,tr_num), .25_WP, 1, mesh)
             !                                                      |    | 
             !             fraction of fourth-order contribution <--'    |
             !                              1st tracer moment is used <--'
             
-            if (flag_debug .and. mype==0)  print *, achar(27)//'[38m'//'             --> call adv_tracers_vert_ppm_ale'//achar(27)//'[0m'
+            if (flag_debug .and. mype==0)  &
+                print *, achar(27)//'[38m'//'             --> call adv_tracers_vert_ppm_ale'//achar(27)//'[0m'
             call adv_tracers_vert_ppm_ale(tr_arr(:,:,tr_num), 1, mesh)
             !                                                 | 
             !                    1st tracer moment is used <--'
             
         case(2) !MUSCL+FCT(3D)
-            if (flag_debug .and. mype==0)  print *, achar(27)//'[38m'//'             --> call adv_tracer_fct_ale'//achar(27)//'[0m'
+            if (flag_debug .and. mype==0)  &
+                print *, achar(27)//'[38m'//'             --> call adv_tracer_fct_ale'//achar(27)//'[0m'
             call adv_tracer_fct_ale(tr_arr_old(:,:,tr_num),tr_arr(:,:,tr_num), 1.0_WP, 1, mesh)
             !                                                                     |    | 
             !                            fraction of fourth-order contribution <--'    | 
@@ -1295,9 +1299,11 @@ subroutine diff_ver_part_redi_expl(mesh)
         
         !_______________________________________________________________________
         do nz=2,nl1
-            vd_flux(nz)=(Z_n(nz-1)-zbar_n(nz))*(slope_tapered(1,nz-1,n)*tr_xynodes(1,nz-1,n)+slope_tapered(2,nz-1,n)*tr_xynodes(2,nz-1,n))*Ki(nz-1,n)
+            vd_flux(nz)=(Z_n(nz-1)-zbar_n(nz))*(slope_tapered(1,nz-1,n)*tr_xynodes(1,nz-1,n)&
+                +slope_tapered(2,nz-1,n)*tr_xynodes(2,nz-1,n))*Ki(nz-1,n)
                         vd_flux(nz)=vd_flux(nz)+&
-                          (zbar_n(nz)-Z_n(nz))  *(slope_tapered(1,nz,n)  *tr_xynodes(1,nz,n)  +slope_tapered(2,nz,n)     *tr_xynodes(2,nz,n))  *Ki(nz,n)
+                          (zbar_n(nz)-Z_n(nz))  *(slope_tapered(1,nz,n)  *tr_xynodes(1,nz,n)  &
+                            +slope_tapered(2,nz,n)     *tr_xynodes(2,nz,n))  *Ki(nz,n)
                         vd_flux(nz)=vd_flux(nz)/(Z_n(nz-1)-Z_n(nz))*area(nz,n)
         enddo
         do nz=1,nl1

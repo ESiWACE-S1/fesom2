@@ -591,7 +591,10 @@ contains
                                          ( sw_3d(kbl(node)-1, node) + &
                                                                     ( sw_3d(kbl(node), node) - sw_3d(kbl(node)-1, node) ) &
                                                                     * ( hbl(node) + zbar_3d_n( kbl(node)-1,node) ) &
-                                                                    / ( zbar_3d_n( kbl(node)-1,node) - zbar_3d_n(kbl(node),node) ) ) )
+                                                                    / ( zbar_3d_n( kbl(node)-1,node) - zbar_3d_n(kbl(node),node) &
+                                                                      ) &
+                                         ) &
+                         )
            stable(node)=0.5_WP + SIGN(0.5_WP, bfsfc(node))
            bfsfc(node) =bfsfc(node) + stable(node) * epsln 
         END IF

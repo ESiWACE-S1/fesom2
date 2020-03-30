@@ -309,8 +309,10 @@ subroutine create_new_file(id)
      end do
      id%error_status(c) = nf_def_var(id%ncid, trim(id%var(j)%name), NF_DOUBLE, id%var(j)%ndim+1, &
                        (/dimid(1:n), id%rec/), id%var(j)%code); c=c+1
-     id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'description', len_trim(id%var(j)%longname), id%var(j)%longname); c=c+1
-     id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'units',       len_trim(id%var(j)%units),    id%var(j)%units);    c=c+1
+     id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'description', &
+      len_trim(id%var(j)%longname), id%var(j)%longname); c=c+1
+     id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'units',       &
+      len_trim(id%var(j)%units),    id%var(j)%units);    c=c+1
   end do
 
   id%error_status(c)=nf_close(id%ncid); c=c+1
@@ -469,7 +471,8 @@ subroutine write_restart(id, istep, mesh)
            if (size1==nod2D  .or. size2==nod2D)  call gather_nod (laux, aux)
            if (size1==elem2D .or. size2==elem2D) call gather_elem(laux, aux)
            if (mype==0) then
-              id%error_status(c)=nf_put_vara_double(id%ncid, id%var(i)%code, (/lev, 1, id%rec_count/), (/1, size2, 1/), aux, 1); c=c+1
+              id%error_status(c)=nf_put_vara_double(id%ncid, id%var(i)%code, &
+                (/lev, 1, id%rec_count/), (/1, size2, 1/), aux, 1); c=c+1
            end if
         end do
         deallocate(laux)
@@ -553,7 +556,8 @@ subroutine read_restart(id, mesh, arg)
         if (size2==elem2D) allocate(laux(myDim_elem2D+eDim_elem2D))        
         do lev=1, size1
            if (mype==0) then
-              id%error_status(c)=nf_get_vara_double(id%ncid, id%var(i)%code, (/lev, 1, id%rec_count/), (/1, size2, 1/), aux, 1); c=c+1
+              id%error_status(c)=nf_get_vara_double(id%ncid, id%var(i)%code, &
+                (/lev, 1, id%rec_count/), (/1, size2, 1/), aux, 1); c=c+1
 !             write(*,*) 'min/max 3D ', lev,'=', minval(aux), maxval(aux)
            end if
            id%var(i)%pt2(lev,:)=0.

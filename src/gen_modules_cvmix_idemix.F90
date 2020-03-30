@@ -506,8 +506,10 @@ module g_cvmix_idemix
                     !___________________________________________________________
                     ! --> calc: div(v_0*idemix_tau_h* grad_h(v_0*E_iw))
                     ! sum fluxes over the surface --> gaussian integral satz
-                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
-                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
+                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) &
+                        + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
+                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) &
+                        - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
                 end do !-->do nz=1,n2
                 
                 !_______________________________________________________________
@@ -534,8 +536,10 @@ module g_cvmix_idemix
                     !___________________________________________________________
                     ! --> calc: div(v_0*idemix_tau_h* grad_h(v_0*E_iw))
                     ! sum fluxes over the surface --> gaussian integral satz
-                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
-                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
+                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) &
+                        + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
+                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) &
+                        - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
                 end do !-->do nz=nl12+1,nl1
                 
                 !_______________________________________________________________
@@ -565,8 +569,10 @@ module g_cvmix_idemix
                     !___________________________________________________________
                     ! --> calc: div(v_0*idemix_tau_h* grad_h(v_0*E_iw))
                     ! sum fluxes over the surface --> gaussian integral satz
-                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
-                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
+                    iwe(nz,ednodes(1)) = iwe(nz,ednodes(1)) &
+                        + dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(1))*vflux
+                    iwe(nz,ednodes(2)) = iwe(nz,ednodes(2)) &
+                        - dt*idemix_tau_h/idemix_n_hor_iwe_prop_iter*vol_wcelli(nz,ednodes(2))*vflux
                     
                 end do !-->do nz=nl12+1,nl1
             end do !-->do edge=1,myDim_edge2D

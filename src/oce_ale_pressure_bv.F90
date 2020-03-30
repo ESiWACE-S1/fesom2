@@ -77,7 +77,8 @@ subroutine pressure_bv(mesh)
     type(t_mesh), intent(in) , target :: mesh    
     real(kind=WP)            :: dz_inv, bv,  a, rho_up, rho_dn, t, s
     integer                  :: node, nz, nl1, nzmax
-    real(kind=WP)            :: rhopot(mesh%nl), bulk_0(mesh%nl), bulk_pz(mesh%nl), bulk_pz2(mesh%nl), rho(mesh%nl), dbsfc1(mesh%nl), db_max
+    real(kind=WP)            :: rhopot(mesh%nl), bulk_0(mesh%nl), bulk_pz(mesh%nl), &
+                                bulk_pz2(mesh%nl), rho(mesh%nl), dbsfc1(mesh%nl), db_max
     real(kind=WP)            :: bulk_up, bulk_dn, smallvalue, buoyancy_crit, rho_surf
     real(kind=WP)            :: sigma_theta_crit=0.125_WP   !kg/m3, Levitus threshold for computing MLD2
     logical                  :: flag1, flag2, mixing_kpp
@@ -219,7 +220,8 @@ subroutine pressure_bv(mesh)
                 end if
                 ! another definition of MLD after Levitus
                 if ((rhopot(nz)-rhopot(1) > sigma_theta_crit) .and. flag2) then
-                    MLD2(node)=MLD2(node)+(Z_3d_n(nz,node)-MLD2(node))/(rhopot(nz)-rhopot(nz-1)+1.e-20)*(rhopot(1)+sigma_theta_crit-rhopot(nz-1))
+                    MLD2(node)=MLD2(node)+(Z_3d_n(nz,node)-MLD2(node)) &
+                        /(rhopot(nz)-rhopot(nz-1)+1.e-20)*(rhopot(1)+sigma_theta_crit-rhopot(nz-1))
                     MLD2_ind(node)=nz
                     flag2=.false.
                 elseif (flag2) then

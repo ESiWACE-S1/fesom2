@@ -226,8 +226,10 @@ MODULE io_BLOWUP
 			end do
 			id%error_status(c) = nf_def_var(id%ncid, trim(id%var(j)%name), NF_DOUBLE, id%var(j)%ndim+1, &
 							(/dimid(1:n), id%rec/), id%var(j)%code); c=c+1
-			id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'description', len_trim(id%var(j)%longname), id%var(j)%longname); c=c+1
-			id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'units',       len_trim(id%var(j)%units),    id%var(j)%units);    c=c+1
+			id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'description', &
+				len_trim(id%var(j)%longname), id%var(j)%longname); c=c+1
+			id%error_status(c)=nf_put_att_text(id%ncid, id%var(j)%code, 'units', &
+				len_trim(id%var(j)%units),    id%var(j)%units);    c=c+1
 		end do
 		
 		id%error_status(c)=nf_close(id%ncid); c=c+1

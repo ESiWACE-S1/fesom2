@@ -15,9 +15,11 @@ module diagnostics
 
   private
 !!PS   
-  public :: ldiag_solver, lcurt_stress_surf, ldiag_energy, ldiag_dMOC, ldiag_DVD, ldiag_forc, ldiag_salt3D, ldiag_curl_vel3, diag_list, &
+  public :: ldiag_solver, lcurt_stress_surf, ldiag_energy, ldiag_dMOC, ldiag_DVD, ldiag_forc, &
+            ldiag_salt3D, ldiag_curl_vel3, diag_list, &
             compute_diagnostics, rhs_diag, curl_stress_surf, curl_vel3, wrhof, rhof, &
-            u_x_u, u_x_v, v_x_v, v_x_w, u_x_w, dudx, dudy, dvdx, dvdy, dudz, dvdz, utau_surf, utau_bott, av_dudz_sq, av_dudz, av_dvdz, stress_bott, u_surf, v_surf, u_bott, v_bott, &
+            u_x_u, u_x_v, v_x_v, v_x_w, u_x_w, dudx, dudy, dvdx, dvdy, dudz, dvdz, utau_surf, &
+            utau_bott, av_dudz_sq, av_dudz, av_dvdz, stress_bott, u_surf, v_surf, u_bott, v_bott, &
             std_dens_min, std_dens_max, std_dens_N, std_dens, std_dens_UVDZ, std_dens_RHOZ, &
             compute_diag_dvd_2ndmoment_klingbeil_etal_2014, compute_diag_dvd_2ndmoment_burchard_etal_2008, compute_diag_dvd
   ! Arrays used for diagnostics, some shall be accessible to the I/O
@@ -28,7 +30,8 @@ module diagnostics
   real(kind=WP),  save, allocatable, target      :: curl_vel3(:,:)
   real(kind=WP),  save, allocatable, target      :: wrhof(:,:), rhof(:,:)
   real(kind=WP),  save, allocatable, target      :: u_x_u(:,:), u_x_v(:,:), v_x_v(:,:), v_x_w(:,:), u_x_w(:,:)
-  real(kind=WP),  save, allocatable, target      :: dudx(:,:), dudy(:,:), dvdx(:,:), dvdy(:,:), dudz(:,:), dvdz(:,:), av_dudz(:,:), av_dvdz(:,:), av_dudz_sq(:,:)
+  real(kind=WP),  save, allocatable, target      :: dudx(:,:), dudy(:,:), dvdx(:,:), dvdy(:,:), dudz(:,:), &
+                                                    dvdz(:,:), av_dudz(:,:), av_dvdz(:,:), av_dudz_sq(:,:)
   real(kind=WP),  save, allocatable, target      :: utau_surf(:), utau_bott(:)
   real(kind=WP),  save, allocatable, target      :: stress_bott(:,:), u_bott(:), v_bott(:), u_surf(:), v_surf(:)
 
@@ -211,9 +214,12 @@ subroutine diag_energy(mode, mesh)
 !=====================
   if (firstcall) then  !allocate the stuff at the first call
      allocate(wrhof(nl, myDim_nod2D), rhof(nl, myDim_nod2D))
-     allocate(u_x_u(nl-1, myDim_nod2D), u_x_v(nl-1, myDim_nod2D), v_x_v(nl-1, myDim_nod2D), v_x_w(nl-1, myDim_elem2D), u_x_w(nl-1, myDim_elem2D))
-     allocate(dudx(nl-1, myDim_nod2D), dudy(nl-1, myDim_nod2D), dvdx(nl-1, myDim_nod2D), dvdy(nl-1, myDim_nod2D), dudz(nl, myDim_elem2D), dvdz(nl, myDim_elem2D))
-     allocate(utau_surf(myDim_elem2D), utau_bott(myDim_elem2D), av_dudz_sq(nl, myDim_elem2D), av_dudz(nl, myDim_elem2D), av_dvdz(nl, myDim_elem2D))
+     allocate(u_x_u(nl-1, myDim_nod2D), u_x_v(nl-1, myDim_nod2D), v_x_v(nl-1, myDim_nod2D), &
+      v_x_w(nl-1, myDim_elem2D), u_x_w(nl-1, myDim_elem2D))
+     allocate(dudx(nl-1, myDim_nod2D), dudy(nl-1, myDim_nod2D), dvdx(nl-1, myDim_nod2D), &
+      dvdy(nl-1, myDim_nod2D), dudz(nl, myDim_elem2D), dvdz(nl, myDim_elem2D))
+     allocate(utau_surf(myDim_elem2D), utau_bott(myDim_elem2D), av_dudz_sq(nl, myDim_elem2D), &
+      av_dudz(nl, myDim_elem2D), av_dvdz(nl, myDim_elem2D))
      allocate(u_surf(myDim_elem2D), v_surf(myDim_elem2D), u_bott(myDim_elem2D), v_bott(myDim_elem2D), stress_bott(2, myDim_elem2D))
      rhof  =0.
      wrhof=0.
@@ -314,7 +320,8 @@ subroutine diag_energy(mode, mesh)
      do nz=nzmax-1,2,-1
         zbar_n(nz) = zbar_n(nz+1) + hnode_new(nz,n)
         Z_n(nz-1)  = zbar_n(nz)   + hnode_new(nz-1,n)/2.0_WP
-        rhof(nz,n) = (hnode_new(nz,n)*density_m_rho0(nz, n)+hnode_new(nz-1,n)*density_m_rho0(nz-1, n))/(hnode_new(nz,n)+hnode_new(nz-1,n))
+        rhof(nz,n) = (hnode_new(nz,n)*density_m_rho0(nz, n)+hnode_new(nz-1,n)*density_m_rho0(nz-1, n)) &
+         /(hnode_new(nz,n)+hnode_new(nz-1,n))
      end do
      zbar_n(1)         = zbar_n(2) + hnode_new(1,n)
      wrhof(1:nzmax, n) = rhof(1:nzmax, n)*Wvel(1:nzmax, n)
@@ -548,8 +555,10 @@ subroutine compute_diag_dvd_2ndmoment_burchard_etal_2008(tr_num, mesh)
             ! --> split it up in DVD contribution from horizontal and vertical 
             ! advection since for the horizontal advection Adams Bashfort tracer 
             ! are used and for the vertical the normal tracer values.
-            tr_dvd_horiz(nz,node,tr_num) = hnode(nz,node)/hnode_new(nz,node)*trAB_sqr(nz,node) - del_ttf_advhoriz(nz,node)/hnode_new(nz,node)
-            tr_dvd_vert(nz,node,tr_num)  = hnode(nz,node)/hnode_new(nz,node)*tr_sqr(  nz,node) - del_ttf_advvert( nz,node)/hnode_new(nz,node)
+            tr_dvd_horiz(nz,node,tr_num) = hnode(nz,node)/hnode_new(nz,node)*trAB_sqr(nz,node) &
+               - del_ttf_advhoriz(nz,node)/hnode_new(nz,node)
+            tr_dvd_vert(nz,node,tr_num)  = hnode(nz,node)/hnode_new(nz,node)*tr_sqr(  nz,node) &
+               - del_ttf_advvert( nz,node)/hnode_new(nz,node)
         end do
     end do
 end subroutine compute_diag_dvd_2ndmoment_burchard_etal_2008
