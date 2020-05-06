@@ -1,0 +1,3 @@
+[submodule "src/fesom2-accelerate"]
+	path = src/fesom2-accelerate
+	url = git@github.com:ESiWACE-S1/fesom2-accelerate.git
