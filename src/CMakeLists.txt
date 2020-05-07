@@ -8,6 +8,8 @@ set(src_home ${CMAKE_CURRENT_LIST_DIR}) # path to src directory starting from th
 file(GLOB sources_Fortran ${src_home}/*.F90)
 #list(REMOVE_ITEM sources_Fortran ${src_home}/fesom_partition_init.F90)
 file(GLOB sources_C ${src_home}/*.c)
+file(GLOB sources_C ${src_home}/*.c ${src_home}/fesom2-accelerate/src/*.cpp)
+include_directories(${src_home}/fesom2-accelerate/include)
 
 #if(${FESOM_STANDALONE})
 #   list(REMOVE_ITEM sources_Fortran ${src_home}/cpl_driver.F90)
