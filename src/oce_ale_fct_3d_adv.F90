@@ -65,6 +65,7 @@ end subroutine adv_tracer_fct_ale
 !===============================================================================
 subroutine fct_init(mesh)
     use MOD_MESH
+    use MOD_MESH_DEV
     use O_MESH
     use o_ARRAYS
     use o_PARAM
@@ -98,6 +99,9 @@ subroutine fct_init(mesh)
     fct_ttf_min=0.0_WP
     fct_plus=0.0_WP
     fct_minus=0.0_WP
+
+    call transfer_mesh(nlevs_nod2D_dev, nlevels_nod2D, myDim_nod2D + eDim_nod2D)
+    call transfer_mesh(nlevs_elem2D_dev, nlevels, myDim_elem2D)
     
     if (mype==0) write(*,*) 'FCT is initialized'
 end subroutine fct_init
