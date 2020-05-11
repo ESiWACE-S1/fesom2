@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.4)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9")
 
+if(${FESOM_CUDA})
+project(fesom C Fortran CXX CUDA)
+else()
 project(fesom C Fortran)
+endif()
 
 # get our source files
 set(src_home ${CMAKE_CURRENT_LIST_DIR}) # path to src directory starting from the dir containing our CMakeLists.txt
