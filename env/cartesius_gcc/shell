@@ -3,6 +3,7 @@ module load 2019
 module load CMake/3.12.1-GCCcore-7.3.0
 module load netCDF/4.6.1-foss-2018b
 module load netCDF-Fortran/4.4.4-foss-2018b
+module load CUDA
 # Compilers
 export FC=mpifort CC=mpicc CXX=mpic++
 # Libraries

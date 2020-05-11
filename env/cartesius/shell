@@ -5,6 +5,7 @@ module unload zlib
 module load netCDF/4.6.1-intel-2018b
 module load netCDF-Fortran/4.4.4-intel-2018b 
 module load intel/2018b
+module load CUDA
 export FC=mpiifort CC=mpiicc CXX=mpiicc
 export NETCDF_C_INCLUDE_DIRECTORIES=$EBROOTNETCDF/include
 export NETCDF_CXX_INCLUDE_DIRECTORIES=$EBROOTNETCDF/include
