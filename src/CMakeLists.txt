@@ -29,7 +29,9 @@ add_library(${PROJECT_NAME}_C ${sources_C})
 target_compile_definitions(${PROJECT_NAME}_C PRIVATE PARMS USE_MPI REAL=double DBL HAS_BLAS FORTRAN_UNDERSCORE VOID_POINTER_SIZE_8 SGI LINUX UNDER_ MPI2)
 target_link_libraries(${PROJECT_NAME}_C parms) #metis
 
+message(fesom cuda? ${FESOM_CUDA})
 if(${FESOM_CUDA})
+add_definitions(-DFESOMCUDA)
 add_library(${PROJECT_NAME}_CUDA ${sources_CUDA})
 target_compile_options(${PROJECT_NAME}_CUDA PRIVATE --std=c++14 -Xcompiler -fPIC -rdc=true)
 endif()

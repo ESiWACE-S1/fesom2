@@ -58,12 +58,4 @@ integer,       allocatable, dimension(:)    :: ind_south, ind_north
 !#endif  
 END TYPE T_MESH
 end module MOD_MESH
-!==========================================================
-
-!==========================================================
-module MOD_MESH_DEV
-USE, intrinsic :: ISO_C_BINDING
-type(c_ptr) :: nlevs_nod2D_dev, nlevs_elem2D_dev
-end module MOD_MESH_DEV
-!==========================================================
-   
+!==========================================================   
