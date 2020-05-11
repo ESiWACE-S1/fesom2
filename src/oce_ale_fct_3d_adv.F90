@@ -113,7 +113,7 @@ subroutine fct_init(mesh)
     call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1))
     call alloc_var(fct_ttf_max_gpu, fct_ttf_max, my_size * (nl - 1))
     call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1))
-    call alloc_var(UV_rhs_gpu, UV_rhs, myDim_elem2D * (nl - 1))
+    call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1))
     call reserve_var(fct_ttf_gpu, my_size * (nl - 1) )
 #endif
     if (mype==0) write(*,*) 'FCT is initialized'
