@@ -7,8 +7,8 @@ project(fesom C Fortran)
 set(src_home ${CMAKE_CURRENT_LIST_DIR}) # path to src directory starting from the dir containing our CMakeLists.txt
 file(GLOB sources_Fortran ${src_home}/*.F90)
 #list(REMOVE_ITEM sources_Fortran ${src_home}/fesom_partition_init.F90)
-file(GLOB sources_C ${src_home}/*.c)
 file(GLOB sources_C ${src_home}/*.c ${src_home}/fesom2-accelerate/src/*.cpp)
+file(GLOB sources_CUDA ${src_home}/fesom2-accelerate/kenels/*.cu ${src_home}/fesom2-accelerate/src/*.cu)
 include_directories(${src_home}/fesom2-accelerate/include)
 
 #if(${FESOM_STANDALONE})
@@ -28,6 +28,11 @@ include(${CMAKE_CURRENT_LIST_DIR}/../cmake/FindNETCDF.cmake)
 add_library(${PROJECT_NAME}_C ${sources_C})
 target_compile_definitions(${PROJECT_NAME}_C PRIVATE PARMS USE_MPI REAL=double DBL HAS_BLAS FORTRAN_UNDERSCORE VOID_POINTER_SIZE_8 SGI LINUX UNDER_ MPI2)
 target_link_libraries(${PROJECT_NAME}_C parms) #metis
+
+if(${FESOM_CUDA})
+add_library(${PROJECT_NAME}_CUDA ${sources_CUDA})
+target_compile_options(${PROJECT_NAME}_CUDA PRIVATE --std=c++14 -Xcompiler -fPIC -rdc=true)
+endif()
 
 # create our binary (set its name to name of this project)
 add_executable(${PROJECT_NAME} ${sources_Fortran})
