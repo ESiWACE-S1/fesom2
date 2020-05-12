@@ -66,7 +66,7 @@ end subroutine adv_tracer_fct_ale
 module MOD_GPU
     USE, intrinsic :: ISO_C_BINDING
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, fct_lo_gpu, fct_ttf_gpu, fct_ttf_min_gpu,&
-                   fct_ttf_max_gpu
+                   fct_ttf_max_gpu, UV_rhs_gpu
 end module MOD_GPU
 !==========================================================
     
@@ -538,6 +538,7 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     ! HO ==High-order (3rd/4th order gradient reconstruction method)
     ! Adds limited fluxes to the LO solution   
     use MOD_MESH
+    use MOD_GPU
     use O_MESH
     use o_ARRAYS
     use o_PARAM
@@ -565,9 +566,9 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     alg_state = 0
 #ifdef FESOMCUDA
     call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus, fct_minus,&
-                                tvert_max, tvert_min, ttf_gpu, ttf, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
+                                tvert_max, tvert_min, fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
-                                nlevels_nod2D_gpu, nlevels_gpu, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
+                                nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
                                 size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
 #else
     ! Insert call to first C-function here
