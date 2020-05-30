@@ -67,7 +67,7 @@ module MOD_GPU
     USE, intrinsic :: ISO_C_BINDING
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu, fct_ttf_max_gpu,&
-                   tvert_max_gpu, tvert_min_gpu, fct_plus_gpu, fct_minus_gpu
+                   fct_plus_gpu, fct_minus_gpu
 end module MOD_GPU
 !==========================================================
     
@@ -173,16 +173,6 @@ subroutine fct_init(mesh)
     call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1), istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_ttf_min to GPU"
-    endif
-    istat = 0
-    call reserve_var(tvert_max_gpu, myDim_nod2D * (nl - 1), istat)
-    if (istat /= 0) then
-        write(0, *) "Error in reserve tvert_max to GPU"
-    endif
-    istat = 0
-    call reserve_var(tvert_min_gpu, myDim_nod2D * (nl - 1), istat)
-    if (istat /= 0) then
-        write(0, *) "Error in reserve tvert_min to GPU"
     endif
     istat = 0
     call alloc_var(fct_plus_gpu, fct_plus, my_size * (nl - 1), istat)
@@ -644,18 +634,17 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     ! --------------------------------------------------------------------------
     alg_state = 0
 #ifdef FESOMCUDA
-    call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus_gpu, fct_minus_gpu,&
-                                fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v_gpu,fct_adf_h_gpu, UV_rhs_gpu, 
-                                area_inv, myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
-                                nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
+    call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus, fct_minus,&
+                                tvert_max, tvert_min, fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
+                                myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
+                                nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_in_elem2D_num, nod_in_elem2D,&
                                 size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
-#else
-    ! Insert call to first C-function here
-    call fct_ale_pre_comm(alg_state, fct_ttf_max, fct_ttf_min, fct_plus, fct_minus,&
-                          tvert_max, tvert_min, ttf, fct_LO, fct_adf_v, fct_adf_h, UV_rhs, area_inv,& 
-                          myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
-                          nlevels_nod2D, nlevels, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
-                          size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
+!#else
+!    call fct_ale_pre_comm(alg_state, fct_ttf_max, fct_ttf_min, fct_plus, fct_minus,&
+!                          tvert_max, tvert_min, ttf, fct_LO, fct_adf_v, fct_adf_h, UV_rhs, area_inv,& 
+!                          myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
+!                          nlevels_nod2D, nlevels, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
+!                          size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
 #endif
     if (alg_state < 1) then
         !___________________________________________________________________________
