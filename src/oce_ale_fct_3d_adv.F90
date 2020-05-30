@@ -65,8 +65,9 @@ end subroutine adv_tracer_fct_ale
 !==========================================================
 module MOD_GPU
     USE, intrinsic :: ISO_C_BINDING
-    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, fct_lo_gpu, fct_ttf_gpu, fct_ttf_min_gpu,&
-                   fct_ttf_max_gpu, UV_rhs_gpu
+    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu
+    type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu, fct_ttf_max_gpu,&
+                   tvert_max_gpu, tvert_min_gpu, fct_plus_gpu, fct_minus_gpu
 end module MOD_GPU
 !==========================================================
     
@@ -79,7 +80,7 @@ subroutine fct_init(mesh)
     use o_PARAM
     use g_PARSUP
     implicit none
-    integer                  :: my_size
+    integer                  :: my_size, istat
     type(t_mesh), intent(in) , target :: mesh
 
 #include "associate_mesh.h"
@@ -108,13 +109,91 @@ subroutine fct_init(mesh)
     fct_plus=0.0_WP
     fct_minus=0.0_WP
 #ifdef FESOMCUDA
-    call transfer_mesh(nlevs_nod2D_gpu, nlevels_nod2D, my_size)
-    call transfer_mesh(nlevs_elem2D_gpu, nlevels, myDim_elem2D)
-    call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1))
-    call alloc_var(fct_ttf_max_gpu, fct_ttf_max, my_size * (nl - 1))
-    call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1))
-    call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1))
-    call reserve_var(fct_ttf_gpu, my_size * (nl - 1) )
+    istat = 0
+    call transfer_mesh(nlevs_nod2D_gpu, nlevels_nod2D, my_size, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer nlevels_nod2D to GPU"
+    endif
+    istat = 0
+    call transfer_mesh(nlevs_elem2D_gpu, nlevels, myDim_elem2D, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer nlevels_elem2D to GPU"
+    endif
+    istat = 0
+    call transfer_mesh(nod_elem2D_gpu, nod_in_elem2D, my_size * size(nod_in_elem2D, 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer nod_in_elem2D to GPU"
+    endif
+    istat = 0
+    call transfer_mesh(nod_num_elem2D_gpu, nod_in_elem2D_num, my_size, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer nod_in_elem2D_num to GPU"
+    endif
+    istat = 0
+    call transfer_mesh(elem2D_nodes_gpu, elem2D_nodes, myDim_elem2D * 3, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer elem2D_nodes to GPU"
+    endif
+
+    istat = 0
+    call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_lo to GPU"
+    else
+        write(0, *) "Allocated fct_lo to GPU with size",my_size * (nl -1) * 8
+    endif
+    istat = 0
+    call reserve_var(fct_ttf_gpu, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_ttf to GPU"
+    endif
+    istat = 0
+    call alloc_var(fct_adf_v_gpu, fct_adf_v, myDim_nod2D * nl, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_adf_v to GPU"
+    else
+        write(0, *) "Allocated fct_adf_v to GPU with size",myDim_nod2D * nl * 8
+    endif
+    istat = 0
+    call alloc_var(fct_adf_h_gpu, fct_adf_h, myDim_edge2D * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_adf_h to GPU"
+    endif
+    istat = 0
+    call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc UV_rhs to GPU"
+    endif
+    istat = 0
+    call alloc_var(fct_ttf_max_gpu, fct_ttf_max, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_ttf_max to GPU"
+    endif
+    istat = 0
+    call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_ttf_min to GPU"
+    endif
+    istat = 0
+    call reserve_var(tvert_max_gpu, myDim_nod2D * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in reserve tvert_max to GPU"
+    endif
+    istat = 0
+    call reserve_var(tvert_min_gpu, myDim_nod2D * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in reserve tvert_min to GPU"
+    endif
+    istat = 0
+    call alloc_var(fct_plus_gpu, fct_plus, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_plus to GPU"
+    endif
+    istat = 0
+    call alloc_var(fct_minus_gpu, fct_minus, my_size * (nl - 1), istat)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc fct_minus to GPU"
+    endif
 #endif
     if (mype==0) write(*,*) 'FCT is initialized'
 end subroutine fct_init
@@ -565,10 +644,11 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     ! --------------------------------------------------------------------------
     alg_state = 0
 #ifdef FESOMCUDA
-    call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus, fct_minus,&
-                                tvert_max, tvert_min, fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
+    call fct_ale_pre_comm_acc2(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus_gpu, fct_minus_gpu,&
+                                tvert_max_gpu, tvert_min_gpu, fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v_gpu,& 
+                                fct_adf_h_gpu, UV_rhs_gpu, area_inv,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
-                                nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
+                                nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
                                 size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
 #else
     ! Insert call to first C-function here
