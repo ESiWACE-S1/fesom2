@@ -637,13 +637,13 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     alg_state = 0
 #ifdef FESOMCUDA
     call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus, fct_minus,&
-                                tvert_max, tvert_min, fct_ttf_gpu, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
+                                fct_ttf_gpu, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
                                 nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_in_elem2D_num, nod_in_elem2D,&
                                 size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
 !#else
 !    call fct_ale_pre_comm(alg_state, fct_ttf_max, fct_ttf_min, fct_plus, fct_minus,&
-!                          tvert_max, tvert_min, ttf, fct_LO, fct_adf_v, fct_adf_h, UV_rhs, area_inv,& 
+!                          ttf, fct_LO, fct_adf_v, fct_adf_h, UV_rhs, area_inv,& 
 !                          myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
 !                          nlevels_nod2D, nlevels, elem2D_nodes, nod_in_elem2D_num, nod_in_elem2D,&
 !                          size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
