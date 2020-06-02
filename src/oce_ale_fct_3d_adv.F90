@@ -23,14 +23,22 @@ module oce_ale_fct_3d_adv_interfaces
     end subroutine
   end interface
 end module
-
 !
+!==========================================================
+module MOD_GPU
+    USE, intrinsic :: ISO_C_BINDING
+    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu
+    type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu, fct_ttf_max_gpu,&
+                   fct_plus_gpu, fct_minus_gpu
+end module MOD_GPU
+!==========================================================
 !
 !===============================================================================
 ! Caller routine for FCT tracer advection 
 subroutine adv_tracer_fct_ale(ttfAB, ttf, num_ord, do_Xmoment, mesh)
     use o_ARRAYS
     use MOD_MESH
+    use MOD_GPU
     use o_MESH
     use o_PARAM
     use g_PARSUP
@@ -41,8 +49,11 @@ subroutine adv_tracer_fct_ale(ttfAB, ttf, num_ord, do_Xmoment, mesh)
     real(kind=WP)            :: ttfAB(mesh%nl-1, myDim_nod2D+eDim_nod2D), ttf(mesh%nl-1, myDim_nod2D+eDim_nod2D)
     real(kind=WP)            :: num_ord
     integer                  :: do_Xmoment !--> = [1,2] compute 1st & 2nd moment of tracer transport
-    integer                  :: i
-
+    integer                  :: i, istat
+#ifdef FESOMCUDA
+! Overlap transfer with host compute: send ttf to gpu
+    call transfer_var_async(fct_ttf_gpu, ttf, istat)
+#endif
     ! 1st. first calculate Low and High order solution
     call fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
         
@@ -62,15 +73,6 @@ subroutine adv_tracer_fct_ale(ttfAB, ttf, num_ord, do_Xmoment, mesh)
 end subroutine adv_tracer_fct_ale
 !
 !
-!==========================================================
-module MOD_GPU
-    USE, intrinsic :: ISO_C_BINDING
-    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu
-    type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu, fct_ttf_max_gpu,&
-                   fct_plus_gpu, fct_minus_gpu
-end module MOD_GPU
-!==========================================================
-    
 !===============================================================================
 subroutine fct_init(mesh)
     use MOD_MESH
@@ -635,7 +637,7 @@ subroutine fct_ale(ttf, iter_yn, mesh)
     alg_state = 0
 #ifdef FESOMCUDA
     call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus, fct_minus,&
-                                tvert_max, tvert_min, fct_ttf_gpu, ttf, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
+                                tvert_max, tvert_min, fct_ttf_gpu, fct_LO_gpu, fct_adf_v, fct_adf_h, UV_rhs_gpu, area_inv,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl,&
                                 nlevs_nod2D_gpu, nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_in_elem2D_num, nod_in_elem2D,&
                                 size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
