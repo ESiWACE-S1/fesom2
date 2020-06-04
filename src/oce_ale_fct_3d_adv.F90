@@ -210,6 +210,7 @@ subroutine fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
     use g_PARSUP
     use g_CONFIG
     use g_comm_auto
+    use MOD_GPU
     implicit none
     type(t_mesh), intent(in) , target :: mesh    
     integer       :: el(2), enodes(2), n, nz, edge
@@ -480,6 +481,11 @@ subroutine fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
             end do ! --> do nz=n2+1, nl2
         end if
     end do
+
+    #ifdef FESOMCUDA
+! Overlap transfer with host compute: send fct_adf_h to gpu
+    call transfer_var_async(fct_adf_h_gpu, fct_adf_h, istat)
+    #endif
     
     !___________________________________________________________________________
     ! ****************** (B) do vertical tracer advection **********************
@@ -600,6 +606,11 @@ subroutine fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
         end do
         
     end do ! --> do n=1, myDim_nod2D
+
+    #ifdef FESOMCUDA
+    ! Overlap transfer with host compute: send fct_adf_h to gpu
+        call transfer_var_async(fct_adf_v_gpu, fct_adf_v, istat)
+    #endif
     
     !___________________________________________________________________________
     call exchange_nod(fct_LO)
