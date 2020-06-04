@@ -27,9 +27,10 @@ end module
 !==========================================================
 module MOD_GPU
     USE, intrinsic :: ISO_C_BINDING
-    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu
-    type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu, fct_ttf_max_gpu,&
-                   fct_plus_gpu, fct_minus_gpu
+    type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu,&
+                   nod2D_edges_gpu, elem2D_edges_gpu
+    type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
+                   fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
 end module MOD_GPU
 !==========================================================
 !
@@ -136,7 +137,16 @@ subroutine fct_init(mesh)
     if (istat /= 0) then
         write(0, *) "Error in transfer elem2D_nodes to GPU"
     endif
-
+    istat = 0
+    call transfer_mesh(nod2D_edges_gpu, edges, myDim_edge2D * 2, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer edges to GPU"
+    endif
+    istat = 0
+    call transfer_mesh(elem2D_edges_gpu, elem_edges, myDim_edge2D * 2, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in transfer elem_edges to GPU"
+    endif
     istat = 0
     call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
     if (istat /= 0) then
@@ -640,7 +650,7 @@ subroutine fct_ale(ttf, iter_yn, mesh)
                                 fct_ttf_gpu, fct_LO_gpu, fct_adf_v_gpu, fct_adf_h_gpu, UV_rhs_gpu, area_inv,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, nl, nlevs_nod2D_gpu,& 
                                 nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
-                                size(nod_in_elem2D, 1), edges, edge_tri, vlimit, flux_eps, bignumber, dt)
+                                size(nod_in_elem2D, 1), nod2D_edges_gpu, elem2D_edges_gpu, vlimit, flux_eps, bignumber, dt)
 !#else
 !    call fct_ale_pre_comm(alg_state, fct_ttf_max, fct_ttf_min, fct_plus, fct_minus,&
 !                          ttf, fct_LO, fct_adf_v, fct_adf_h, UV_rhs, area_inv,& 
@@ -805,7 +815,9 @@ subroutine fct_ale(ttf, iter_yn, mesh)
                 fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0_WP,-fct_adf_h(nz,edge)) 
             end do
         end do 
+    end if
         
+    if (alg_state < 6) then
         !___________________________________________________________________________
         ! b2. Limiting factors
         do n=1,myDim_nod2D
@@ -817,6 +829,7 @@ subroutine fct_ale(ttf, iter_yn, mesh)
             end do
         end do 
     end if
+    
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
 
