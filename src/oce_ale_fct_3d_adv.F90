@@ -50,10 +50,10 @@ subroutine adv_tracer_fct_ale(ttfAB, ttf, num_ord, do_Xmoment, mesh)
     real(kind=WP)            :: ttfAB(mesh%nl-1, myDim_nod2D+eDim_nod2D), ttf(mesh%nl-1, myDim_nod2D+eDim_nod2D)
     real(kind=WP)            :: num_ord
     integer                  :: do_Xmoment !--> = [1,2] compute 1st & 2nd moment of tracer transport
-    integer                  :: i, istat
+    integer                  :: i
 #ifdef FESOMCUDA
 ! Overlap transfer with host compute: send ttf to gpu
-    call transfer_var_async(fct_ttf_gpu, ttf, istat)
+    call transfer_var_async(fct_ttf_gpu, ttf)
 #endif
     ! 1st. first calculate Low and High order solution
     call fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
@@ -143,9 +143,9 @@ subroutine fct_init(mesh)
         write(0, *) "Error in transfer edges to GPU"
     endif
     istat = 0
-    call transfer_mesh(elem2D_edges_gpu, elem_edges, myDim_edge2D * 2, istat)
+    call transfer_mesh(elem2D_edges_gpu, edge_tri, myDim_edge2D * 2, istat)
     if (istat /= 0) then
-        write(0, *) "Error in transfer elem_edges to GPU"
+        write(0, *) "Error in transfer edge_tri to GPU"
     endif
     istat = 0
     call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
@@ -482,10 +482,10 @@ subroutine fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
         end if
     end do
 
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
 ! Overlap transfer with host compute: send fct_adf_h to gpu
-    call transfer_var_async(fct_adf_h_gpu, fct_adf_h, istat)
-    #endif
+    call transfer_var_async(fct_adf_h_gpu, fct_adf_h)
+#endif
     
     !___________________________________________________________________________
     ! ****************** (B) do vertical tracer advection **********************
@@ -607,10 +607,10 @@ subroutine fct_ale_muscl_LH(ttfAB, ttf, num_ord, do_Xmoment, mesh)
         
     end do ! --> do n=1, myDim_nod2D
 
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
     ! Overlap transfer with host compute: send fct_adf_h to gpu
-        call transfer_var_async(fct_adf_v_gpu, fct_adf_v, istat)
-    #endif
+    call transfer_var_async(fct_adf_v_gpu, fct_adf_v)
+#endif
     
     !___________________________________________________________________________
     call exchange_nod(fct_LO)
