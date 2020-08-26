@@ -56,7 +56,7 @@ subroutine oce_adv_tra_fct_init(mesh)
     fct_ttf_min=0.0_WP
     fct_plus=0.0_WP
     fct_minus=0.0_WP
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
     istat = 0
     call transfer_mesh(nlevs_nod2D_gpu, nlevels_nod2D, my_size, istat)
     if (istat /= 0) then
@@ -153,7 +153,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     ! HO ==High-order (3rd/4th order gradient reconstruction method)
     ! Adds limited fluxes to the LO solution   
     use MOD_MESH
-    use MOD_GPU
+    use MOD_TRA_FCT_GPU
     use O_MESH
     use o_ARRAYS
     use o_PARAM

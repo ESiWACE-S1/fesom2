@@ -134,10 +134,10 @@ subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v
             if (mype==0) write(*,*) 'Unknown horizontal advection type ',  trim(tra_adv_hor), '! Check your namelists!'
             call par_ex(1)
     END SELECT
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
 ! Overlap transfer with host compute: send fct_adf_h to gpu
         call transfer_var_async(fct_adf_h_gpu, adv_flux_hor)
-    #endif
+#endif
 
    
     if (trim(tra_adv_lim)=='FCT') then
@@ -160,10 +160,10 @@ subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v
             if (mype==0) write(*,*) 'Unknown vertical advection type ',  trim(tra_adv_ver), '! Check your namelists!'
             call par_ex(1)
     END SELECT
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
 ! Overlap transfer with host compute: send fct_adf_h to gpu
         call transfer_var_async(fct_adf_v_gpu, adv_flux_ver)
-    #endif
+#endif
 !if (mype==0) then
 !   write(*,*) 'check new:'
 !   write(*,*) '1:', minval(fct_LO),       maxval(fct_LO),       sum(fct_LO)
