@@ -39,11 +39,11 @@ subroutine update_atm_forcing(istep, mesh)
   INTEGER                                          :: my_global_rank, ierror
   INTEGER 					   :: status(MPI_STATUS_SIZE)
 #endif
-  character(15)                         :: vari, filevari
-  character(4)                          :: fileyear
-  integer, parameter                    :: nci=192, ncj=94 ! T62 grid
-  real(kind=WP), dimension(nci,ncj)     :: array_nc, array_nc2,array_nc3,x
-  character(500)                        :: file
+  !character(15)                         :: vari, filevari
+  !character(4)                          :: fileyear
+  !integer, parameter                    :: nci=192, ncj=94 ! T62 grid
+  !real(kind=WP), dimension(nci,ncj)     :: array_nc, array_nc2,array_nc3,x
+  !character(500)                        :: file
 #include "associate_mesh.h"
   t1=MPI_Wtime()
 #ifdef __oasis
@@ -190,16 +190,18 @@ subroutine update_atm_forcing(istep, mesh)
 	 do_rotate_oce_wind=.false.
          do_rotate_ice_wind=.false.
       end if
-#else	
+#else
   call sbc_do(mesh)
-  u_wind   =atmdata(i_xwind, :)
-  v_wind   =atmdata(i_ywind, :)
-  shum     =atmdata(i_humi, :)
-  longwave =atmdata(i_qlw, :)
-  shortwave=atmdata(i_qsr, :)
-  Tair     =atmdata(i_tair, :)-273.15_WP
-  prec_rain=atmdata(i_prec, :)/1000._WP
-  prec_snow=atmdata(i_snow, :)/1000._WP
+  u_wind    = atmdata(i_xwind,:)
+  v_wind    = atmdata(i_ywind,:)
+  shum      = atmdata(i_humi ,:)
+  longwave  = atmdata(i_qlw  ,:)
+  shortwave = atmdata(i_qsr  ,:)
+  Tair      = atmdata(i_tair ,:)-273.15_WP
+  prec_rain = atmdata(i_prec ,:)/1000._WP
+  prec_snow = atmdata(i_snow ,:)/1000._WP
+  press_air = atmdata(i_mslp ,:) ! unit should be Pa
+
   ! second, compute exchange coefficients
   ! 1) drag coefficient 
   if(AOMIP_drag_coeff) then
@@ -213,8 +215,8 @@ subroutine update_atm_forcing(istep, mesh)
   end if
   ! third, compute wind stress
   do i=1,myDim_nod2d+eDim_nod2d     
-     dux=u_wind(i)-u_w(i) 
-     dvy=v_wind(i)-v_w(i)
+     dux=u_wind(i)-(1.0_WP-Swind)*u_w(i) 
+     dvy=v_wind(i)-(1.0_WP-Swind)*v_w(i)
      aux=sqrt(dux**2+dvy**2)*rhoair
      stress_atmoce_x(i) = Cd_atm_oce_arr(i)*aux*dux
      stress_atmoce_y(i) = Cd_atm_oce_arr(i)*aux*dvy

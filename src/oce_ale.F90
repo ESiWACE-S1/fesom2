@@ -79,7 +79,7 @@ subroutine init_ale(mesh)
     use oce_ale_interfaces
     Implicit NONE
     
-    integer                  :: n, nzmax
+    integer                  :: n, nzmax, elnodes(3), elem
     type(t_mesh), intent(in) , target :: mesh
 #include "associate_mesh.h"
     !___allocate________________________________________________________________
@@ -146,6 +146,15 @@ subroutine init_ale(mesh)
         Z_3d_n(nzmax-1,n) =zbar_3d_n(nzmax-1,n)+(zbar_n_bot(n)-zbar_3d_n(nzmax-1,n))/2;
         
     end do
+    
+!!PS     do elem=1, myDim_elem2D
+!!PS         nzmax=nlevels(elem)
+!!PS         elnodes=elem2D_nodes(:,elem) 
+!!PS         zbar_e_bot(elem) = sum(zbar_3d_n(nzmax,elnodes))/3.0_WP
+!!PS !!PS         zbar_e_bot(elem) = minval(zbar_3d_n(nzmax,elnodes))/3.0_WP
+!!PS !!PS         zbar_e_bot(elem) = maxval(zbar_3d_n(nzmax,elnodes))/3.0_WP
+!!PS         bottom_elem_thickness(elem)=zbar(nzmax-1)-zbar_e_bot(elem)
+!!PS     end do
 
 end subroutine init_ale
 !
@@ -1451,7 +1460,7 @@ subroutine vert_vel_ale(mesh)
                 ! if vertical CFL criteria at a certain node is at its limit 
                 ! don't take away further layer thickness --> take it than better 
                 ! from a deeper layer
-                where (CFL_z(1:lzstar_lev,n)>=0.95_WP) max_dhbar2distr=0.0_WP
+                where ((CFL_z(1:lzstar_lev,n)>=0.95_WP) .or. (CFL_z(2:lzstar_lev+1,n)>=0.95_WP)) max_dhbar2distr=0.0_WP
                 
                 !_______________________________________________________________
                 ! try to limitate over how much layers i realy need to distribute
@@ -1661,29 +1670,31 @@ subroutine vert_vel_ale(mesh)
     
     !___________________________________________________________________________
     ! calc vertical CFL criteria for debugging purpose and vertical Wvel splitting
+    CFL_z(1,:)=0._WP
     do n=1, myDim_nod2D+eDim_nod2D
         do nz=1,nlevels_nod2D(n)-1
-            ! CFL from positiv bottom face prism veloctiy
-            c1=max(0.0_WP,Wvel(nz+1,n))*dt/hnode_new(nz,n)
-            ! CFL from negative top face prism veloctiy
-            c2=abs(min(0.0_WP,Wvel(nz  ,n))*dt/hnode_new(nz,n))
-            ! maximum CFL
-            CFL_z(nz,n)=max(c1, c2)
+            c1=abs(Wvel(nz,n)  *dt/hnode_new(nz,n))
+            c2=abs(Wvel(nz+1,n)*dt/hnode_new(nz,n))
+            ! strong condition:
+            ! total volume change induced by the vertical motion
+            ! no matter, upwind or downwind !
+            CFL_z(nz,  n)=CFL_z(nz,n)+c1
+            CFL_z(nz+1,n)=c2
         end do
     end do
     cflmax=maxval(CFL_z(:, 1:myDim_nod2D)) !local CFL maximum is different on each mype
     if (cflmax>1.0_WP) then
         do n=1, myDim_nod2D
-            do nz=1,nlevels_nod2D(n)-1
+            do nz=1,nlevels_nod2D(n)
                 !!PS if (abs(CFL_z(nz,n)-cflmax) < 1.e-12) then
-                if (abs(CFL_z(nz,n)-cflmax) < 1.e-12 .and. CFL_z(nz,n) > 1.0_WP .and. CFL_z(nz,n)<=2.0_WP ) then
-                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[33m'//' --> WARNING CFLz>1:'//achar(27)//&
-                          '[0m','CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/'&
-                          ,geo_coord_nod2D(2,n)/rad,',nz=',nz
+                if (abs(CFL_z(nz,n)-cflmax) < 1.e-12 .and. CFL_z(nz,n) > 1.2_WP .and. CFL_z(nz,n)<=2.0_WP ) then
+                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[33m'//' --> WARNING CFLz>1.2:'//achar(27)//'[0m',&
+                          'CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',geo_coord_nod2D(2,n)/rad,&
+                          ',nz=',nz
                 elseif (abs(CFL_z(nz,n)-cflmax) < 1.e-12 .and. CFL_z(nz,n) > 2.0_WP) then          
-                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[31m'//' --> WARNING CFLz>1:'//achar(27)//&
-                          '[0m','CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',&
-                          geo_coord_nod2D(2,n)/rad,',nz=',nz
+                    print '(A, A, F4.2, A, I6, A, F7.2,A,F6.2, A, I3)', achar(27)//'[31m'//' --> WARNING CFLz>2:'//achar(27)//'[0m',&
+                          'CFLz_max=',cflmax,',mstep=',mstep,',glon/glat=',geo_coord_nod2D(1,n)/rad,'/',geo_coord_nod2D(2,n)/rad,&
+                          ',nz=',nz
                     !!PS write(*,*) '***********************************************************'
                     !!PS write(*,*) 'max. CFL_z = ', cflmax, ' mype = ', mype
                     !!PS write(*,*) 'mstep      = ', mstep
@@ -1697,18 +1708,25 @@ subroutine vert_vel_ale(mesh)
     end if
     
     !___________________________________________________________________________
-    ! Split implicit vertical velocity onto implicit and explicit components
-    if (w_split) then
-        do n=1, myDim_nod2D+eDim_nod2D
-            do nz=1,nlevels_nod2D(n)
-                Wvel_e(nz,n)=min(max(Wvel(nz,n), -w_exp_max), w_exp_max)
-            end do
-        end do
-    else
-        Wvel_e=Wvel
-    end if
-    Wvel_i=Wvel-Wvel_e
- 
+    ! Split implicit vertical velocity onto implicit and explicit components using CFL criteria:
+    ! w_max_cfl constrains the allowed explicit w according to the CFL at this place
+    ! w_max_cfl=1 means   w_exp  is cut at at the maximum of allowed CFL
+    ! w_max_cfl=0 means   w_exp  is zero (everything computed implicitly)
+    ! w_max_cfl=inf menas w_impl is zero (everything computed explicitly)
+    ! a guess for optimal choice of w_max_cfl would be 0.95
+    do n=1, myDim_nod2D+eDim_nod2D
+       do nz=1,nlevels_nod2D(n)
+          c1=1.0_WP
+          c2=0.0_WP
+          if (w_split .and. (CFL_z(nz, n) > w_max_cfl)) then
+             dd=max((CFL_z(nz, n)-w_max_cfl), 0.0_WP)/max(w_max_cfl, 1.e-12)
+             c1=1.0_WP/(1.0_WP+dd) !explicit part =1. if dd=0.
+             c2=dd    /(1.0_WP+dd) !implicit part =1. if dd=inf
+          end if
+          Wvel_e(nz,n)=c1*Wvel(nz,n)
+          Wvel_i(nz,n)=c2*Wvel(nz,n)
+       end do
+    end do
 end subroutine vert_vel_ale
 !
 !
@@ -1989,9 +2007,7 @@ end subroutine impl_vert_visc_ale
 !
 !===============================================================================
 subroutine oce_timestep_ale(n, mesh)
-    use g_config, only: logfile_outfreq,rtime_oce,rtime_tot,rtime_oce_dyn, &
-                        rtime_oce_solvessh,rtime_oce_solvetra,rtime_oce_GMRedi,&
-                        rtime_oce_mixpres,rtime_oce_dynssh,which_ale,flag_debug
+    use g_config
     use MOD_MESH
     use o_ARRAYS
     use o_PARAM
@@ -2005,6 +2021,7 @@ subroutine oce_timestep_ale(n, mesh)
     use g_cvmix_pp
     use g_cvmix_kpp
     use g_cvmix_tidal
+    use Toy_Channel_Soufflet
     use oce_ale_interfaces
     
     IMPLICIT NONE
@@ -2043,7 +2060,7 @@ subroutine oce_timestep_ale(n, mesh)
     call compute_neutral_slope(mesh)
     
     !___________________________________________________________________________
-    call status_check(mesh)
+    call status_check
     
     !___________________________________________________________________________
     ! >>>>>>                                                             <<<<<<
@@ -2081,6 +2098,7 @@ subroutine oce_timestep_ale(n, mesh)
     else if(mix_scheme_nmb==2 .or. mix_scheme_nmb==27) then
         if (flag_debug .and. mype==0)  print *, achar(27)//'[36m'//'     --> call oce_mixing_PP'//achar(27)//'[0m' 
         call oce_mixing_PP(mesh)
+        call mo_convect(mesh)
         
     ! use CVMIX KPP (Large at al. 1994) 
     else if(mix_scheme_nmb==3 .or. mix_scheme_nmb==37) then
@@ -2094,6 +2112,7 @@ subroutine oce_timestep_ale(n, mesh)
     else if(mix_scheme_nmb==4 .or. mix_scheme_nmb==47) then
         if (flag_debug .and. mype==0)  print *, achar(27)//'[36m'//'     --> call calc_cvmix_pp'//achar(27)//'[0m'
         call calc_cvmix_pp(mesh)
+        call mo_convect(mesh)
         
     ! use CVMIX TKE (turbulent kinetic energy closure) parameterisation for 
     ! vertical mixing with or without the IDEMIX (dissipation of energy by 
@@ -2102,6 +2121,7 @@ subroutine oce_timestep_ale(n, mesh)
     else if(mix_scheme_nmb==5 .or. mix_scheme_nmb==56) then    
         if (flag_debug .and. mype==0)  print *, achar(27)//'[36m'//'     --> call calc_cvmix_tke'//achar(27)//'[0m'
         call calc_cvmix_tke(mesh)
+        call mo_convect(mesh)
         
     end if     
 
@@ -2147,6 +2167,7 @@ subroutine oce_timestep_ale(n, mesh)
     ! Take updated ssh matrix and solve --> new ssh!
     t30=MPI_Wtime() 
     call solve_ssh_ale(mesh)
+    if ((toy_ocean) .AND. (TRIM(which_toy)=="soufflet")) call relax_zonal_vel(mesh)
     t3=MPI_Wtime() 
 
     ! estimate new horizontal velocity u^(n+1)
