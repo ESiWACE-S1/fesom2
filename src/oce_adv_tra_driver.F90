@@ -41,6 +41,9 @@ end module
 subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v, opth, optv, mesh)
     use MOD_MESH
     use O_MESH
+#ifdef FESOMCUDA
+    use MOD_TRA_FCT_GPU
+#endif
     use o_ARRAYS
     use o_PARAM
     use g_PARSUP

@@ -19,6 +19,7 @@ module oce_adv_tra_fct_interfaces
     end subroutine
  end interface
 end module
+#ifdef FESOMCUDA
 module MOD_TRA_FCT_GPU
     USE, intrinsic :: ISO_C_BINDING
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu,&
@@ -26,17 +27,21 @@ module MOD_TRA_FCT_GPU
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
 end module
+#endif
 !
 !
 !===============================================================================
 subroutine oce_adv_tra_fct_init(mesh)
     use MOD_MESH
+#ifdef FESOMCUDA
+    use MOD_TRA_FCT_GPU
+#endif
     use O_MESH
     use o_ARRAYS
     use o_PARAM
     use g_PARSUP
     implicit none
-    integer                  :: my_size
+    integer                  :: my_size, istat
     type(t_mesh), intent(in) , target :: mesh
 
 #include "associate_mesh.h"
@@ -96,8 +101,6 @@ subroutine oce_adv_tra_fct_init(mesh)
     call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_lo to GPU"
-    else
-        write(0, *) "Allocated fct_lo to GPU with size",my_size * (nl -1) * 8
     endif
     istat = 0
     call reserve_var(fct_ttf_gpu, my_size * (nl - 1), istat)
@@ -105,16 +108,14 @@ subroutine oce_adv_tra_fct_init(mesh)
         write(0, *) "Error in alloc fct_ttf to GPU"
     endif
     istat = 0
-    call alloc_var(fct_adf_v_gpu, fct_adf_v, myDim_nod2D * nl, istat)
+    call alloc_var(fct_adf_v_gpu, adv_flux_ver, myDim_nod2D * nl, istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_adf_v to GPU"
-    else
-        write(0, *) "Allocated fct_adf_v to GPU with size",myDim_nod2D * nl * 8
     endif
     istat = 0
-    call alloc_var(fct_adf_h_gpu, fct_adf_h, myDim_edge2D * (nl - 1), istat)
+    call alloc_var(fct_adf_h_gpu, adv_flux_hor, myDim_edge2D * (nl - 1), istat)
     if (istat /= 0) then
-        write(0, *) "Error in alloc fct_adf_h to GPU"
+        write(0, *) "Error in alloc adv_flux_hor to GPU"
     endif
     istat = 0
     call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1), istat)
