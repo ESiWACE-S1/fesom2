@@ -23,7 +23,7 @@ end module
 module MOD_TRA_FCT_GPU
     USE, intrinsic :: ISO_C_BINDING
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu,&
-                   nod2D_edges_gpu, elem2D_edges_gpu
+                   nod2D_edges_gpu, elem2D_edges_gpu, area_inv_gpu
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
 end module
@@ -98,6 +98,12 @@ subroutine oce_adv_tra_fct_init(mesh)
         write(0, *) "Error in transfer edge_tri to GPU"
     endif
     istat = 0
+    call alloc_var(area_inv_gpu, area_inv, my_size * (nl - 1), istat)
+    call transfer_var(area_inv_gpu, area_inv)
+    if (istat /= 0) then
+        write(0, *) "Error in alloc/transfer area_inv to GPU"
+    endif
+    istat = 0
     call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_lo to GPU"
@@ -154,7 +160,9 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     ! HO ==High-order (3rd/4th order gradient reconstruction method)
     ! Adds limited fluxes to the LO solution   
     use MOD_MESH
+#ifdef FESOMCUDA
     use MOD_TRA_FCT_GPU
+#endif
     use O_MESH
     use o_ARRAYS
     use o_PARAM
@@ -180,7 +188,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     alg_state = 0
 #ifdef FESOMCUDA
     call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus_gpu, fct_minus_gpu,&
-                                fct_ttf_gpu, fct_LO_gpu, fct_adf_v_gpu, fct_adf_h_gpu, UV_rhs_gpu, area_inv,& 
+                                fct_ttf_gpu, fct_LO_gpu, fct_adf_v_gpu, fct_adf_h_gpu, UV_rhs_gpu, area_inv_gpu,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, mesh%nl, nlevs_nod2D_gpu,& 
                                 nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
                                 size(nod_in_elem2D, 1), nod2D_edges_gpu, elem2D_edges_gpu, vlimit, flux_eps,&
