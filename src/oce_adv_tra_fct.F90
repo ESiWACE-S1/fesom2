@@ -27,6 +27,15 @@ module MOD_TRA_FCT_GPU
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
 end module
+
+subroutine allocate_pinned_memory(arr, size_vert, size_hor)
+    USE, intrinsic :: ISO_C_BINDING
+    real, intent(out), pointer :: arr(:,:)
+    integer, intent(in)        :: size_hor, size_vert
+    type(c_ptr) :: cptr
+    call allocate_pinned_doubles(cptr, size_hor * size_vert)
+    call c_f_pointer(cptr, arr, (/size_vert, size_hor/))
+end subroutine
 #endif
 !
 !
@@ -48,9 +57,13 @@ subroutine oce_adv_tra_fct_init(mesh)
 
     my_size=myDim_nod2D+eDim_nod2D
     allocate(fct_LO(nl-1, my_size))        ! Low-order solution 
+#ifdef FESOMCUDA
+    call allocate_pinned_memory(adv_flux_hor, (nl-1), myDim_edge2D) ! antidiffusive hor. contributions / from edges
+    call allocate_pinned_memory(adv_flux_ver, nl, myDim_nod2D)      ! antidiffusive ver. fluxes / from nodes
+#else
     allocate(adv_flux_hor(nl-1,myDim_edge2D)) ! antidiffusive hor. contributions / from edges
     allocate(adv_flux_ver(nl, myDim_nod2D))   ! antidiffusive ver. fluxes / from nodes
-
+#endif
     allocate(fct_ttf_max(nl-1, my_size),fct_ttf_min(nl-1, my_size))
     allocate(fct_plus(nl-1, my_size),fct_minus(nl-1, my_size))
     ! Initialize with zeros: 
