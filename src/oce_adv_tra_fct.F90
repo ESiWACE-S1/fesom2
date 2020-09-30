@@ -26,16 +26,16 @@ module MOD_TRA_FCT_GPU
                    nod2D_edges_gpu, elem2D_edges_gpu, area_inv_gpu
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
-end module
-
-subroutine allocate_pinned_memory(arr, size_vert, size_hor)
-    USE, intrinsic :: ISO_C_BINDING
-    real, intent(out), pointer :: arr(:,:)
-    integer, intent(in)        :: size_hor, size_vert
-    type(c_ptr) :: cptr
-    call allocate_pinned_doubles(cptr, size_hor * size_vert)
-    call c_f_pointer(cptr, arr, (/size_vert, size_hor/))
-end subroutine
+    contains
+    subroutine allocate_pinned_memory(arr, size_vert, size_hor)
+        USE, intrinsic :: ISO_C_BINDING
+        real, intent(out), pointer :: arr(:,:)
+        integer, intent(in)        :: size_hor, size_vert
+        type(c_ptr) :: cptr
+        call allocate_pinned_doubles(cptr, size_hor * size_vert)
+        call c_f_pointer(cptr, arr, (/size_vert, size_hor/))
+    end subroutine
+    end module
 #endif
 !
 !
