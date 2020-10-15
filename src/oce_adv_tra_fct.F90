@@ -22,10 +22,12 @@ end module
 #ifdef FESOMCUDA
 module MOD_TRA_FCT_GPU
     USE, intrinsic :: ISO_C_BINDING
+    use o_PARAM
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu,&
                    nod2D_edges_gpu, elem2D_edges_gpu, area_inv_gpu
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
+    real(kind=WP), pointer, contiguous :: tr_buff(:,:)
     contains
     subroutine allocate_pinned_memory(arr, size_vert, size_hor)
         USE, intrinsic :: ISO_C_BINDING
@@ -56,16 +58,26 @@ subroutine oce_adv_tra_fct_init(mesh)
 #include "associate_mesh.h"
 
     my_size=myDim_nod2D+eDim_nod2D
-    allocate(fct_LO(nl-1, my_size))        ! Low-order solution 
 #ifdef FESOMCUDA
-    call allocate_pinned_memory(adv_flux_hor, (nl-1), myDim_edge2D) ! antidiffusive hor. contributions / from edges
+    write(0, *) "Allocating page-locked tr_buff, size:", (nl-1)*my_size
+    call allocate_pinned_memory(tr_buff, nl-1, my_size)
+    write(0, *) "Allocating page-locked fct_LO, size:", (nl-1)*my_size
+    call allocate_pinned_memory(fct_LO, nl-1, my_size)        ! Low-order solution 
+    write(0, *) "Allocating page-locked adv_flux_hor, size:", (nl-1)*myDim_edge2D
+    call allocate_pinned_memory(adv_flux_hor, nl-1, myDim_edge2D) ! antidiffusive hor. contributions / from edges
+    write(0, *) "Allocating page-locked adv_flux_ver, size:", nl*myDim_nod2D
     call allocate_pinned_memory(adv_flux_ver, nl, myDim_nod2D)      ! antidiffusive ver. fluxes / from nodes
+    write(0, *) "Allocating page-locked fct_plus, size:", (nl-1)*my_size
+    call allocate_pinned_memory(fct_plus, nl-1, my_size)
+    write(0, *) "Allocating page-locked fct_minus, size:", (nl-1)*my_size
+    call allocate_pinned_memory(fct_minus, nl-1, my_size)
 #else
+    allocate(fct_LO(nl-1, my_size))        ! Low-order solution 
     allocate(adv_flux_hor(nl-1,myDim_edge2D)) ! antidiffusive hor. contributions / from edges
     allocate(adv_flux_ver(nl, myDim_nod2D))   ! antidiffusive ver. fluxes / from nodes
+    allocate(fct_plus(nl-1, my_size),fct_minus(nl-1, my_size))
 #endif
     allocate(fct_ttf_max(nl-1, my_size),fct_ttf_min(nl-1, my_size))
-    allocate(fct_plus(nl-1, my_size),fct_minus(nl-1, my_size))
     ! Initialize with zeros: 
     fct_LO=0.0_WP
     adv_flux_hor=0.0_WP
@@ -206,7 +218,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
                                 nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
                                 size(nod_in_elem2D, 1), nod2D_edges_gpu, elem2D_edges_gpu, vlimit, flux_eps,&
                                 bignumber, dt)
-#endif
+#else
     if (alg_state < 1) then
         ! --------------------------------------------------------------------------
         ! ttf is the tracer field on step n
@@ -380,7 +392,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
             end do
         end do
     end if
-    
+#endif    
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
     

@@ -170,16 +170,18 @@ USE, intrinsic :: ISO_FORTRAN_ENV
 ! of open boundaries and advection schemes
 !
 ! The fct part
-real(kind=WP),allocatable,dimension(:,:)      :: fct_LO          ! Low-order solution
 #ifdef FESOMCUDA
+real(kind=WP),pointer,dimension(:,:),contiguous :: fct_LO          ! Low-order solution
 real(kind=WP),pointer,dimension(:,:),contiguous :: adv_flux_hor    ! Antidif. horiz. contrib. from edges / backup for iterafive fct scheme
 real(kind=WP),pointer,dimension(:,:),contiguous :: adv_flux_ver    ! Antidif. vert. fluxes from nodes    / backup for iterafive fct scheme
+real(kind=WP),pointer,dimension(:,:),contiguous :: fct_plus,fct_minus
 #else
+real(kind=WP),allocatable,dimension(:,:)      :: fct_LO          ! Low-order solution
 real(kind=WP),allocatable,dimension(:,:)      :: adv_flux_hor    ! Antidif. horiz. contrib. from edges / backup for iterafive fct scheme
 real(kind=WP),allocatable,dimension(:,:)      :: adv_flux_ver    ! Antidif. vert. fluxes from nodes    / backup for iterafive fct scheme
+real(kind=WP),allocatable,dimension(:,:)      :: fct_plus,fct_minus
 #endif
 real(kind=WP),allocatable,dimension(:,:)      :: fct_ttf_max,fct_ttf_min
-real(kind=WP),allocatable,dimension(:,:)      :: fct_plus,fct_minus
 ! Quadratic reconstruction part
 integer,allocatable,dimension(:)              :: nlevels_nod2D_min, nn_num, nboundary_lay
 real(kind=WP),allocatable,dimension(:,:,:)    :: quad_int_mat, quad_int_coef
