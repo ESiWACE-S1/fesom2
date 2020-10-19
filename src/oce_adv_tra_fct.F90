@@ -173,7 +173,8 @@ subroutine oce_adv_tra_fct_init(mesh)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_minus to GPU"
     endif
-#endif    
+    call set_mpi_rank(mype, npes)
+#endif
     if (mype==0) write(*,*) 'FCT is initialized'
 end subroutine oce_adv_tra_fct_init
 !===============================================================================
