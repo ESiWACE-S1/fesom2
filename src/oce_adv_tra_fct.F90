@@ -111,7 +111,7 @@ subroutine oce_adv_tra_fct_init(mesh)
         write(0, *) "Error in transfer edge_tri to GPU"
     endif
     istat = 0
-    call alloc_var(area_inv_gpu, area_inv, my_size * (nl - 1), istat)
+    call alloc_var(area_inv_gpu, area_inv, my_size * nl, istat)
     call transfer_var(area_inv_gpu, area_inv)
     if (istat /= 0) then
         write(0, *) "Error in alloc/transfer area_inv to GPU"
