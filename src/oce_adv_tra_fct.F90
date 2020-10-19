@@ -385,36 +385,43 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
     
-    !___________________________________________________________________________
-    ! b3. Limiting   
-    !Vertical
-    do n=1, myDim_nod2D
-        nz=1
-        ae=1.0_WP
-        flux=adf_v(nz,n)
-        if(flux>=0.0_WP) then 
-            ae=min(ae,fct_plus(nz,n))
-        else
-            ae=min(ae,fct_minus(nz,n))
-        end if
-        adf_v(nz,n)=ae*adf_v(nz,n) 
-        
-        do nz=2,nlevels_nod2D(n)-1
+    #ifdef FESOMCUDA
+    call fct_ale_inter_comm_acc(  alg_state, fct_plus_gpu, fct_minus_gpu,&
+                                  fct_adf_v_gpu, myDim_nod2D, mesh%nl, nlevs_nod2D_gpu )
+    #endif
+
+    if (alg_state < 7) then
+        !___________________________________________________________________________
+        ! b3. Limiting   
+        !Vertical
+        do n=1, myDim_nod2D
+            nz=1
             ae=1.0_WP
             flux=adf_v(nz,n)
-            if(flux>=0._WP) then 
-                ae=min(ae,fct_minus(nz-1,n))
+            if(flux>=0.0_WP) then 
                 ae=min(ae,fct_plus(nz,n))
             else
-                ae=min(ae,fct_plus(nz-1,n))
                 ae=min(ae,fct_minus(nz,n))
-            end if            
-            adf_v(nz,n)=ae*adf_v(nz,n)
+            end if
+            adf_v(nz,n)=ae*adf_v(nz,n) 
+            
+            do nz=2,nlevels_nod2D(n)-1
+                ae=1.0_WP
+                flux=adf_v(nz,n)
+                if(flux>=0._WP) then 
+                    ae=min(ae,fct_minus(nz-1,n))
+                    ae=min(ae,fct_plus(nz,n))
+                else
+                    ae=min(ae,fct_plus(nz-1,n))
+                    ae=min(ae,fct_minus(nz,n))
+                end if            
+                adf_v(nz,n)=ae*adf_v(nz,n)
+            end do
+        ! the bottom flux is always zero 
         end do
-    ! the bottom flux is always zero 
-    end do
+    end if
 
-        call exchange_nod_end  ! fct_plus, fct_minus
+    call exchange_nod_end  ! fct_plus, fct_minus
     !Horizontal
     do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
