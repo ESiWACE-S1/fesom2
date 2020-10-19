@@ -59,6 +59,7 @@ subroutine oce_adv_tra_fct_init(mesh)
 
     my_size=myDim_nod2D+eDim_nod2D
 #ifdef FESOMCUDA
+    call set_mpi_rank(mype, npes)
     write(0, *) "Allocating page-locked tr_buff, size:", (nl-1)*my_size
     call allocate_pinned_memory(tr_buff, nl-1, my_size)
     write(0, *) "Allocating page-locked fct_LO, size:", (nl-1)*my_size
@@ -173,7 +174,6 @@ subroutine oce_adv_tra_fct_init(mesh)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_minus to GPU"
     endif
-    call set_mpi_rank(mype, npes)
 #endif
     if (mype==0) write(*,*) 'FCT is initialized'
 end subroutine oce_adv_tra_fct_init
