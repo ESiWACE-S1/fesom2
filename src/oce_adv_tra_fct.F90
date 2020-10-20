@@ -436,7 +436,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
 #ifdef FESOMCUDA
     call fct_ale_post_comm_acc( alg_state, fct_plus_gpu, fct_minus_gpu,&
                                 fct_adf_h_gpu, myDim_edge2D, mesh%nl,&
-                                nlevs_nod2D_gpu, nod_in_elem2D_gpu, nod2D_edges_gpu,&
+                                nlevs_nod2D_gpu, nod_elem2D_gpu, nod2D_edges_gpu,&
                                 elem2D_edges_gpu)
 #endif
     if (alg_state < 8) then
@@ -452,7 +452,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
             do nz=1, max(nl1,nl2)
                 ae=1.0_WP
                 flux=adf_h(nz,edge)
-                
+
                 if(flux>=0._WP) then
                     ae=min(ae,fct_plus(nz,enodes(1)))
                     ae=min(ae,fct_minus(nz,enodes(2)))
@@ -460,7 +460,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
                     ae=min(ae,fct_minus(nz,enodes(1)))
                     ae=min(ae,fct_plus(nz,enodes(2)))
                 endif
-                
+
                 adf_h(nz,edge)=ae*adf_h(nz,edge)
             end do
         end do
