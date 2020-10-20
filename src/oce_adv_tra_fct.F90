@@ -396,11 +396,10 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
 #endif    
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
-    
-    #ifdef FESOMCUDA
+#ifdef FESOMCUDA
     call fct_ale_inter_comm_acc(  alg_state, fct_plus_gpu, fct_minus_gpu,&
                                   fct_adf_v_gpu, myDim_nod2D, mesh%nl, nlevs_nod2D_gpu )
-    #endif
+#endif
 
     if (alg_state < 7) then
         !___________________________________________________________________________
@@ -434,28 +433,36 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     end if
 
     call exchange_nod_end  ! fct_plus, fct_minus
-    !Horizontal
-    do edge=1, myDim_edge2D
-        enodes(1:2)=edges(:,edge)
-        el=edge_tri(:,edge)
-        nl1=nlevels(el(1))-1
-        nl2=0
-        if(el(2)>0) then
-            nl2=nlevels(el(2))-1
-        end if  
-        do nz=1, max(nl1,nl2)
-            ae=1.0_WP
-            flux=adf_h(nz,edge)
-            
-            if(flux>=0._WP) then
-                ae=min(ae,fct_plus(nz,enodes(1)))
-                ae=min(ae,fct_minus(nz,enodes(2)))
-            else
-                ae=min(ae,fct_minus(nz,enodes(1)))
-                ae=min(ae,fct_plus(nz,enodes(2)))
-            endif
-            
-            adf_h(nz,edge)=ae*adf_h(nz,edge)
+#ifdef FESOMCUDA
+    call fct_ale_post_comm_acc( alg_state, fct_plus_gpu, fct_minus_gpu,&
+                                fct_adf_h_gpu, myDim_edge2D, mesh%nl,&
+                                nlevs_nod2D_gpu, nod_in_elem2D_gpu, nod2D_edges_gpu,&
+                                elem2D_edges_gpu)
+#endif
+    if (alg_state < 8) then
+        !Horizontal
+        do edge=1, myDim_edge2D
+            enodes(1:2)=edges(:,edge)
+            el=edge_tri(:,edge)
+            nl1=nlevels(el(1))-1
+            nl2=0
+            if(el(2)>0) then
+                nl2=nlevels(el(2))-1
+            end if  
+            do nz=1, max(nl1,nl2)
+                ae=1.0_WP
+                flux=adf_h(nz,edge)
+                
+                if(flux>=0._WP) then
+                    ae=min(ae,fct_plus(nz,enodes(1)))
+                    ae=min(ae,fct_minus(nz,enodes(2)))
+                else
+                    ae=min(ae,fct_minus(nz,enodes(1)))
+                    ae=min(ae,fct_plus(nz,enodes(2)))
+                endif
+                
+                adf_h(nz,edge)=ae*adf_h(nz,edge)
+            end do
         end do
-    end do
+    end if
 end subroutine oce_tra_adv_fct
