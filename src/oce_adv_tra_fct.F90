@@ -135,17 +135,17 @@ subroutine oce_adv_tra_fct_init(mesh)
         write(0, *) "Error in alloc fct_lo to GPU"
     endif
     istat = 0
-    call reserve_var(fct_ttf_gpu, my_size * (nl - 1), istat)
+    call reserve_var_stream(fct_ttf_gpu, my_size * (nl - 1), istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_ttf to GPU"
     endif
     istat = 0
-    call alloc_var(fct_adf_v_gpu, adv_flux_ver, myDim_nod2D * nl, istat)
+    call alloc_var_stream(fct_adf_v_gpu, adv_flux_ver, myDim_nod2D * nl, istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_adf_v to GPU"
     endif
     istat = 0
-    call alloc_var(fct_adf_h_gpu, adv_flux_hor, myDim_edge2D * (nl - 1), istat)
+    call alloc_var_stream(fct_adf_h_gpu, adv_flux_hor, myDim_edge2D * (nl - 1), istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc adv_flux_hor to GPU"
     endif
