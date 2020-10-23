@@ -219,7 +219,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
                                 nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
                                 size(nod_in_elem2D, 1), nod2D_edges_gpu, elem2D_edges_gpu, vlimit, flux_eps,&
                                 bignumber, dt)
-#else
+#endif
     if (alg_state < 1) then
         ! --------------------------------------------------------------------------
         ! ttf is the tracer field on step n
@@ -393,7 +393,6 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
             end do
         end do
     end if
-#endif    
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
 #ifdef FESOMCUDA
