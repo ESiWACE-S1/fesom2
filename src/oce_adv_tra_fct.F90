@@ -60,17 +60,11 @@ subroutine oce_adv_tra_fct_init(mesh)
     my_size=myDim_nod2D+eDim_nod2D
 #ifdef FESOMCUDA
     call set_mpi_rank(mype, npes)
-    write(0, *) "Allocating page-locked tr_buff, size:", (nl-1)*my_size
     call allocate_pinned_memory(tr_buff, nl-1, my_size)
-    write(0, *) "Allocating page-locked fct_LO, size:", (nl-1)*my_size
     call allocate_pinned_memory(fct_LO, nl-1, my_size)        ! Low-order solution 
-    write(0, *) "Allocating page-locked adv_flux_hor, size:", (nl-1)*myDim_edge2D
     call allocate_pinned_memory(adv_flux_hor, nl-1, myDim_edge2D) ! antidiffusive hor. contributions / from edges
-    write(0, *) "Allocating page-locked adv_flux_ver, size:", nl*myDim_nod2D
     call allocate_pinned_memory(adv_flux_ver, nl, myDim_nod2D)      ! antidiffusive ver. fluxes / from nodes
-    write(0, *) "Allocating page-locked fct_plus, size:", (nl-1)*my_size
     call allocate_pinned_memory(fct_plus, nl-1, my_size)
-    write(0, *) "Allocating page-locked fct_minus, size:", (nl-1)*my_size
     call allocate_pinned_memory(fct_minus, nl-1, my_size)
 #else
     allocate(fct_LO(nl-1, my_size))        ! Low-order solution 
