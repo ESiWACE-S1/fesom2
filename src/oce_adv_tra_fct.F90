@@ -23,18 +23,29 @@ end module
 module MOD_TRA_FCT_GPU
     USE, intrinsic :: ISO_C_BINDING
     use o_PARAM
+    ! Mesh definitions arrays
     type(c_ptr) :: nlevs_nod2D_gpu, nlevs_elem2D_gpu, nod_elem2D_gpu, nod_num_elem2D_gpu, elem2D_nodes_gpu,&
                    nod2D_edges_gpu, elem2D_edges_gpu, area_inv_gpu
+    ! Field arrays
     type(c_ptr) :: fct_lo_gpu, fct_ttf_gpu, fct_adf_v_gpu, fct_adf_h_gpu,  UV_rhs_gpu, fct_ttf_min_gpu,&
                    fct_ttf_max_gpu, fct_plus_gpu, fct_minus_gpu
+
+    ! CUDA streams
+    type(c_ptr) :: htod_s, kern_s, adfh_s, adfv_s
+
+    ! Tracer work array
     real(kind=WP), pointer, contiguous :: tr_buff(:,:)
+
     contains
+
+    ! Wrapper for C-function to allocate pinned memory of reals
     subroutine allocate_pinned_memory(arr, size_vert, size_hor)
         USE, intrinsic :: ISO_C_BINDING
         real, intent(out), pointer :: arr(:,:)
         integer, intent(in)        :: size_hor, size_vert
         type(c_ptr) :: cptr
-        call allocate_pinned_doubles(cptr, size_hor * size_vert)
+        integer     :: istat
+        call allocate_pinned_doubles(cptr, size_hor * size_vert, istat)
         call c_f_pointer(cptr, arr, (/size_vert, size_hor/))
     end subroutine
     end module
@@ -118,55 +129,71 @@ subroutine oce_adv_tra_fct_init(mesh)
         write(0, *) "Error in transfer edge_tri to GPU"
     endif
     istat = 0
-    call alloc_var(area_inv_gpu, area_inv, my_size * nl, istat)
+    call alloc_var(area_inv_gpu, area_inv, my_size * nl, .false., istat)
     call transfer_var(area_inv_gpu, area_inv)
     if (istat /= 0) then
         write(0, *) "Error in alloc/transfer area_inv to GPU"
     endif
     istat = 0
-    call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), istat)
+    call alloc_var(fct_lo_gpu, fct_lo, my_size * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_lo to GPU"
     endif
     istat = 0
-    call reserve_var_stream(fct_ttf_gpu, my_size * (nl - 1), istat)
+    call reserve_var(fct_ttf_gpu, my_size * (nl - 1), .true., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_ttf to GPU"
     endif
     istat = 0
-    call alloc_var_stream(fct_adf_v_gpu, adv_flux_ver, myDim_nod2D * nl, istat)
+    call alloc_var(fct_adf_v_gpu, adv_flux_ver, myDim_nod2D * nl, .true., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_adf_v to GPU"
     endif
     istat = 0
-    call alloc_var_stream(fct_adf_h_gpu, adv_flux_hor, myDim_edge2D * (nl - 1), istat)
+    call alloc_var(fct_adf_h_gpu, adv_flux_hor, myDim_edge2D * (nl - 1), .true., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc adv_flux_hor to GPU"
     endif
     istat = 0
-    call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1), istat)
+    call alloc_var(UV_rhs_gpu, UV_rhs, 2 * myDim_elem2D * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc UV_rhs to GPU"
     endif
     istat = 0
-    call alloc_var(fct_ttf_max_gpu, fct_ttf_max, my_size * (nl - 1), istat)
+    call alloc_var(fct_ttf_max_gpu, fct_ttf_max, my_size * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_ttf_max to GPU"
     endif
     istat = 0
-    call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1), istat)
+    call alloc_var(fct_ttf_min_gpu, fct_ttf_min, my_size * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_ttf_min to GPU"
     endif
     istat = 0
-    call alloc_var(fct_plus_gpu, fct_plus, my_size * (nl - 1), istat)
+    call alloc_var(fct_plus_gpu, fct_plus, my_size * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_plus to GPU"
     endif
     istat = 0
-    call alloc_var(fct_minus_gpu, fct_minus, my_size * (nl - 1), istat)
+    call alloc_var(fct_minus_gpu, fct_minus, my_size * (nl - 1), .false., istat)
     if (istat /= 0) then
         write(0, *) "Error in alloc fct_minus to GPU"
+    endif
+    call make_stream(htod_s, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in creating transfer stream"
+    endif
+    call make_stream(kern_s, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in creating kernel stream"
+    endif
+    call make_stream(adfh_s, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in creating adfh split stream"
+    endif
+    call make_stream(adfv_s, istat)
+    if (istat /= 0) then
+        write(0, *) "Error in creating adfv split stream"
     endif
 #endif
     if (mype==0) write(*,*) 'FCT is initialized'
@@ -203,16 +230,18 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     real(kind=WP)                     :: bignumber=1e3
     integer                           :: vlimit=1
     integer                           :: alg_state !state of the algorithm, useful when combining C/cuda with Fortran
+    integer                           :: istat
 
 #include "associate_mesh.h"
     alg_state = 0
 #ifdef FESOMCUDA
-    call fct_ale_pre_comm_acc(  alg_state, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus_gpu, fct_minus_gpu,&
+    call fct_ale_pre_comm_acc(  alg_state, kern_s, fct_ttf_max_gpu, fct_ttf_min_gpu, fct_plus_gpu, fct_minus_gpu,&
                                 fct_ttf_gpu, fct_LO_gpu, fct_adf_v_gpu, fct_adf_h_gpu, UV_rhs_gpu, area_inv_gpu,& 
                                 myDim_nod2D, eDim_nod2D, myDim_elem2D, myDim_edge2D, mesh%nl, nlevs_nod2D_gpu,& 
                                 nlevs_elem2D_gpu, elem2D_nodes_gpu, nod_num_elem2D_gpu, nod_elem2D_gpu,&
                                 size(nod_in_elem2D, 1), nod2D_edges_gpu, elem2D_edges_gpu, vlimit, flux_eps,&
                                 bignumber, dt)
+    call await_stream(kern_s, istat)
 #endif
     if (alg_state < 1) then
         ! --------------------------------------------------------------------------
@@ -390,7 +419,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
 #ifdef FESOMCUDA
-    call fct_ale_inter_comm_acc(  alg_state, fct_plus_gpu, fct_minus_gpu,&
+    call fct_ale_inter_comm_acc(  alg_state, adfv_s, fct_plus_gpu, fct_minus_gpu,&
                                   fct_adf_v_gpu, myDim_nod2D, mesh%nl, nlevs_nod2D_gpu )
 #endif
 
@@ -427,7 +456,7 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
 
     call exchange_nod_end  ! fct_plus, fct_minus
 #ifdef FESOMCUDA
-    call fct_ale_post_comm_acc( alg_state, fct_plus_gpu, fct_minus_gpu,&
+    call fct_ale_post_comm_acc( alg_state, adfh_s, fct_plus_gpu, fct_minus_gpu,&
                                 fct_adf_h_gpu, myDim_edge2D, mesh%nl,&
                                 nlevs_elem2D_gpu, nod_elem2D_gpu, nod2D_edges_gpu,&
                                 elem2D_edges_gpu)
@@ -458,4 +487,8 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
             end do
         end do
     end if
+#ifdef FESOMCUDA
+    call await_stream(adfv_s, istat)
+    call await_stream(adfh_s, istat)
+#endif
 end subroutine oce_tra_adv_fct

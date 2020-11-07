@@ -78,7 +78,7 @@ subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v
 #include "associate_mesh.h"
 #ifdef FESOMCUDA
 ! Overlap transfer with host compute: send ttf to gpu
-    call transfer_var_async(fct_ttf_gpu, ttf)
+    call transfer_var_async(fct_ttf_gpu, ttf, htod_s, .true.)
 #endif
     if (trim(tra_adv_lim)=='FCT') then 
     ! compute the low order upwind horizontal flux
@@ -139,7 +139,7 @@ subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v
     END SELECT
 #ifdef FESOMCUDA
 ! Overlap transfer with host compute: send fct_adf_h to gpu
-        call transfer_var_async(fct_adf_h_gpu, adv_flux_hor)
+        call transfer_var_async(fct_adf_h_gpu, adv_flux_hor, htod_s, .true.)
 #endif
 
    
@@ -165,7 +165,7 @@ subroutine do_oce_adv_tra(ttf, ttfAB, vel, w, wi, we, do_Xmoment, dttf_h, dttf_v
     END SELECT
 #ifdef FESOMCUDA
 ! Overlap transfer with host compute: send fct_adf_h to gpu
-        call transfer_var_async(fct_adf_v_gpu, adv_flux_ver)
+        call transfer_var_async(fct_adf_v_gpu, adv_flux_ver, htod_s, .true.)
 #endif
 !if (mype==0) then
 !   write(*,*) 'check new:'
