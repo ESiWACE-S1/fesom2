@@ -17,5 +17,5 @@ target_include_directories(${PROJECT_NAME}
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL Cray )
    target_compile_options(${PROJECT_NAME} PRIVATE -hstd=c++11)
 else()
-   target_compile_options(${PROJECT_NAME} PRIVATE -std=c++11)
+   target_compile_options(${PROJECT_NAME} PRIVATE -std=c++11 -lpthread)
 endif()
