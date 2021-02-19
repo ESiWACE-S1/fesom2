@@ -50,6 +50,7 @@ type(t_mesh), target, save      :: mesh
 #endif
 #endif
 
+#ifdef FESOM_OPENACC
 #ifdef OPTIM_ACC_SET_DEVICE
 #ifdef _OPENACC
   !! Initialize ACC
@@ -68,6 +69,7 @@ type(t_mesh), target, save      :: mesh
   ngpus = acc_get_num_devices(acc_device_default)
   gpuId = mod(local_rank, ngpus)
   call acc_set_device_num(gpuId, acc_get_device_type())
+#endif
 #endif
 #endif
 

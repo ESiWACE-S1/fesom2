@@ -33,12 +33,6 @@ subroutine oce_adv_tra_fct_init(mesh)
     type(t_mesh), intent(in) , target :: mesh
 
 #include "associate_mesh.h"
-! Copy mesh information to gpu once at initialization
-!acc enter data copyin(nl,nlevels_nod2D,nlevels,nod_in_elem2D,nod_in_elem2D_num,elem2D_nodes,edges,edge_tri,area)
-!!$acc enter data copyin(nlevels_nod2D,nl,nlevels,elem2D_nodes,nod_in_elem2D,nod_in_elem2D_num,edges,edge_tri,area)
-
-!!$omp target enter data map(to:nlevels_nod2D,nl,nlevels,elem2D_nodes,nod_in_elem2D,nod_in_elem2D_num,edges,edge_tri,area)
-
     my_size=myDim_nod2D+eDim_nod2D
     allocate(fct_LO(nl-1, my_size))        ! Low-order solution 
     allocate(adv_flux_hor(nl-1,myDim_edge2D)) ! antidiffusive hor. contributions / from edges
@@ -54,11 +48,6 @@ subroutine oce_adv_tra_fct_init(mesh)
     fct_ttf_min=0.0_WP
     fct_plus=0.0_WP
     fct_minus=0.0_WP
-! Allocate gpu arrays for fct kernels.
-!acc enter data create(fct_LO,fct_ttf_max,fct_ttf_min,adv_flux_hor,adv_flux_ver,fct_plus,fct_minus,UV_rhs)
-!!$acc enter data create(fct_ttf_max,fct_ttf_min,UV_rhs,fct_plus,fct_minus)
-
-!!$omp target enter data map(alloc:fct_ttf_max,fct_ttf_min,UV_rhs,fct_plus,fct_minus)
     
     if (mype==0) write(*,*) 'FCT is initialized'
 end subroutine oce_adv_tra_fct_init
@@ -92,13 +81,11 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     real(kind=WP)                     :: tvert_min_nzm1, tvert_min_nz, tvert_min_nzp1
     real(kind=WP)                     :: flux_eps=1e-16
     real(kind=WP)                     :: bignumber=1e3
-    integer                           :: vlimit=1, vec_len
+    integer                           :: vlimit=1
     integer                           :: n_idx, nn
 
 
 include "associate_mesh.h"
-    !!$acc data copyin(LO)
-    !!$omp target data map(to:LO)
 
     ! ------------      --------------------------------------------------------------
     ! ttf is the tracer field on step n
@@ -108,20 +95,8 @@ include "associate_mesh.h"
     !___________________________________________________________________________
     ! a1. max, min between old solution and updated low-order solution per node
 
-!!    vec_len=32
-!!    do while(vec_len<nl .and. vec_len<128)
-!!        vec_len = 2*vec_len
-!!    end do
-
     ! Double loop over blocks then threads. Copy LO array, rest is either static mesh info or copied in 
     ! calling routine do_oce_adv_tra
-    !!$acc parallel loop gang present(LO,ttf,nlevels_nod2D) vector_length(vec_len)
-
-    !!$acc parallel loop gang
-
-    !!!!$omp target data map(to:LO(mesh%nl-1,myDim_nod2D+eDim_nod2D), ttf(mesh%nl-1,myDim_nod2D+eDim_nod2D), nlevels_nod2D(myDim_nod2D+edim_nod2d)) map(from:fct_ttf_max(nl-1,myDim_nod2D+edim_nod2d), fct_ttf_min(nl-1,myDim_nod2D+edim_nod2d))
-    !!$omp target teams distribute parallel do map(to:LO(mesh%nl-1,myDim_nod2D+eDim_nod2D), ttf(mesh%nl-1,myDim_nod2D+eDim_nod2D), nlevels_nod2D(myDim_nod2D+edim_nod2d)) map(from:fct_ttf_max(nl-1,myDim_nod2D+edim_nod2d), fct_ttf_min(nl-1,myDim_nod2D+edim_nod2d))
-    ! map(to:LO(mesh%nl-1,myDim_nod2D+eDim_nod2D), ttf(mesh%nl-1,myDim_nod2D+eDim_nod2D), nlevels_nod2D(myDim_nod2D+edim_nod2d)) map(from:fct_ttf_max(nl-1,myDim_nod2D+edim_nod2d), fct_ttf_min(nl-1,myDim_nod2D+edim_nod2d))
     !$omp target teams distribute parallel do
     do n=1, myDim_nod2D+edim_nod2d
         do nz=1, nlevels_nod2D(n)-1 
@@ -137,25 +112,15 @@ include "associate_mesh.h"
 
     ! Double loop over blocks then threads. All arrays are either static mesh info or copied in 
     ! calling routine do_oce_adv_tra, enodes are private array
-    !!$acc parallel loop gang present(nl,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) private(enodes) vector_length(vec_len)
     !$omp target teams distribute parallel do &
-    !!$omp map(to:mesh%nlevels) &
-    !!$ map(to: &
-    !!$omp   nlevels(myDim_nod2D+eDim_elem2D+eXDim_elem2D), &
-    !!$omp   elem2D_nodes(3,myDim_nod2D+eDim_elem2D+eXDim_elem2D), &
-    !!$omp   fct_ttf_min(nl-1,myDim_nod2D+eDim_nod2D), &
-    !!$omp   fct_ttf_max(nl-1,myDim_nod2D+eDim_nod2D)) &
-    !!$omp map(from:UV_rhs(2,nl-1, myDim_elem2D+eDim_elem2D)) &
     !$omp private(enodes)
     do elem=1, myDim_elem2D
         enodes=elem2D_nodes(:,elem)
-        !!!$acc loop vector
         do nz=1, nlevels(elem)-1
             UV_rhs(1,nz,elem)=maxval(fct_ttf_max(nz,enodes))
             UV_rhs(2,nz,elem)=minval(fct_ttf_min(nz,enodes))
         end do
         !!if (nlevels(elem)<=mesh%nl-1) then
-            !!$acc loop vector
         do nz=nlevels(elem),mesh%nl-1
             UV_rhs(1,nz,elem)=-bignumber
             UV_rhs(2,nz,elem)= bignumber
@@ -174,9 +139,7 @@ include "associate_mesh.h"
 
     if(vlimit==1) then
         !Horizontal
-        !!$acc parallel loop gang present(nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs,fct_ttf_min,fct_ttf_max,LO) private(tvert_min,tvert_max) copyout(fct_ttf_min, fct_ttf_max) vector_length(vec_len)
         !$omp target teams distribute parallel do private(tvert_max_nzm1, tvert_max_nz, tvert_max_nzp1, tvert_min_nzm1, tvert_min_nz, tvert_min_nzp1, nz)
-
         do n=1, myDim_nod2D
 
            tvert_max_nzm1 = 0
@@ -218,20 +181,16 @@ include "associate_mesh.h"
     ! Vertical2: Similar to the version above, but the vertical bounds are more 
     ! local  
     if(vlimit==2) then
-        !!$acc parallel loop gang present(nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs,fct_ttf_min,fct_ttf_max,LO) private(tvert_min,tvert_max) copyout(fct_ttf_min, fct_ttf_max) vector_length(vec_len)
         !!$omp target teams distribute parallel do
         do n=1, myDim_nod2D
-            !!$acc loop vector
             do nz=1,nlevels_nod2D(n)-1
                 tvert_max(nz)= maxval(UV_rhs(1,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
                 tvert_min(nz)= minval(UV_rhs(2,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
             end do
-            !!$acc loop vector
             do nz=2, nlevels_nod2D(n)-2
                 tvert_max(nz)=max(tvert_max(nz),maxval(fct_ttf_max(nz-1:nz+1,n)))
                 tvert_min(nz)=min(tvert_min(nz),minval(fct_ttf_max(nz-1:nz+1,n)))
             end do
-            !!$acc loop vector
             do nz=1,nlevels_nod2D(n)-1
                 fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
                 fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)  
@@ -243,20 +202,16 @@ include "associate_mesh.h"
     ! Vertical3: Vertical bounds are taken into account only if they are narrower than the
     !            horizontal ones  
     if(vlimit==3) then
-        !!$acc parallel loop gang present(nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs,fct_ttf_min,fct_ttf_max,LO) private(tvert_min,tvert_max) copyout(fct_ttf_min, fct_ttf_max) vector_length(vec_len)
         !!$omp target teams distribute parallel do
         do n=1, myDim_nod2D
-            !!$acc loop vector
             do nz=1,nlevels_nod2D(n)-1
                 tvert_max(nz)= maxval(UV_rhs(1,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
                 tvert_min(nz)= minval(UV_rhs(2,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
             end do
-            !!$acc loop vector
             do nz=2, nlevels_nod2D(n)-2
                 tvert_max(nz)=min(tvert_max(nz),maxval(fct_ttf_max(nz-1:nz+1,n)))
                 tvert_min(nz)=max(tvert_min(nz),minval(fct_ttf_max(nz-1:nz+1,n)))
             end do
-            !!$acc loop vector
             do nz=1,nlevels_nod2D(n)-1
                 fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
                 fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)  
@@ -273,10 +228,8 @@ include "associate_mesh.h"
 
     ! Double loop over blocks then threads. All arrays are either static mesh info or copied in 
     ! calling routine do_oce_adv_tra, enodes are private array
-    !!$acc parallel loop gang present(nlevels_nod2D,fct_plus,fct_minus) vector_length(vec_len)
     !$omp target teams distribute parallel do
     do n=1, myDim_nod2D
-        !!$acc loop vector
         do nz=1,nlevels_nod2D(n)-1
             fct_plus(nz,n)=0._WP
             fct_minus(nz,n)=0._WP
@@ -285,12 +238,8 @@ include "associate_mesh.h"
     
     !Vertical
 
-    ! Wait for stream 3, copying adf_v onto GPU, then perform kernel
-    !!$acc wait(3)
-    !!$acc parallel loop gang present(nlevels_nod2D,fct_plus,fct_minus,adf_v) vector_length(vec_len)
     !$omp target teams distribute parallel do
     do n=1, myDim_nod2D
-        !!$acc loop vector
         do nz=1,nlevels_nod2D(n)-1
 !             fct_plus(nz,n)=fct_plus(nz,n)+ &
 !                             (max(0.0_WP,adf_v(nz,n))+max(0.0_WP,-adf_v(nz+1,n))) &
@@ -305,9 +254,6 @@ include "associate_mesh.h"
     
     !Horizontal
 
-    ! Wait for stream 3, copying adf_h onto GPU, then perform kernel
-    !!$acc wait(2)
-    !!$acc parallel loop gang present(nlevels,edges,edge_tri,fct_plus,fct_minus,adf_h) private(enodes,el) vector_length(vec_len)
     !$omp target teams distribute parallel do private(nl1, nl2, el, enodes)
     do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
@@ -317,18 +263,13 @@ include "associate_mesh.h"
         if(el(2)>0) then
             nl2=nlevels(el(2))-1
         end if   
-        !!$acc loop vector
         do nz=1, max(nl1,nl2)
-            !!$acc atomic
             !$omp atomic
             fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0_WP, adf_h(nz,edge))
-            !!$acc atomic
             !$omp atomic
             fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0_WP, adf_h(nz,edge))  
-            !!$acc atomic
             !$omp atomic
             fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0_WP,-adf_h(nz,edge))
-            !!$acc atomic
             !$omp atomic
             fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0_WP,-adf_h(nz,edge)) 
         end do
@@ -338,10 +279,8 @@ include "associate_mesh.h"
     ! b2. Limiting factors
 
     ! Double loop over blocks then threads. Transfer fct_plus, fct_minus to cpu for halo exchange
-    !!$acc parallel loop gang present(nlevels_nod2D,fct_plus,fct_minus,fct_ttf_min,fct_ttf_max,area) private(flux) vector_length(vec_len)
     !$omp target teams distribute parallel do private(flux)
     do n=1,myDim_nod2D
-        !!$acc loop vector
         do nz=1,nlevels_nod2D(n)-1
             flux=fct_plus(nz,n)*dt/area(nz,n)+flux_eps
             fct_plus(nz,n)=min(1.0_WP,fct_ttf_max(nz,n)/flux)
@@ -350,8 +289,6 @@ include "associate_mesh.h"
         end do
     end do
     
-    !!$acc update self(fct_plus,fct_minus)
-
     ! fct_minus and fct_plus must be known to neighbouring PE
     call exchange_nod(fct_plus, fct_minus)
     
@@ -361,7 +298,6 @@ include "associate_mesh.h"
 
     ! Double loop over blocks then threads. Transfer result adf_v back to cpu. 
     ! Schedule kernel asynchronously on stream 3, because next one is independent
-    !!$acc parallel loop gang present(nlevels_nod2D,fct_plus,fct_minus,adf_v) private(nz,ae,flux) vector_length(vec_len) async(3)
     !$omp target teams distribute parallel do private(nz, ae,flux)
     do n=1, myDim_nod2D
         nz=1
@@ -373,7 +309,6 @@ include "associate_mesh.h"
             ae=min(ae,fct_minus(nz,n))
         end if
         adf_v(nz,n)=ae*adf_v(nz,n)
-        !!$acc loop vector
         do nz=2,nlevels_nod2D(n)-1
             ae=1.0_WP
             flux=adf_v(nz,n)
@@ -389,17 +324,12 @@ include "associate_mesh.h"
     ! the bottom flux is always zero 
     end do
 
-    !!$acc update self(adf_v) async(3)
-
     call exchange_nod_end  ! fct_plus, fct_minus
-
-    !!$acc update device(fct_plus,fct_minus)
 
     !Horizontal
 
     ! Double loop over blocks then threads. Transfer result adf_h back to cpu.
     ! Schedule kernel asynchronously on stream 4, because next one is independent
-    !!$acc parallel loop gang present(nlevels,edges,edge_tri,fct_plus,fct_minus,adf_h) private(enodes,el,nl1,nl2,ae,flux) vector_length(vec_len) async(4)
     !$omp target teams distribute parallel do private(enodes, el, nl1, nl2, ae, flux)
     do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
@@ -409,7 +339,6 @@ include "associate_mesh.h"
         if(el(2)>0) then
             nl2=nlevels(el(2))-1
         end if  
-        !!$acc loop vector
         do nz=1, max(nl1,nl2)
             ae=1.0_WP
             flux=adf_h(nz,edge)
@@ -425,13 +354,5 @@ include "associate_mesh.h"
             adf_h(nz,edge)=ae*adf_h(nz,edge)
         end do
     end do
-
-    !!$acc update self(adf_h) async(4)
-    ! Wait for streams to finish
-    !!$acc wait(3)
-    !!$acc wait(4)
-    !!$acc end data
-
-    !!$omp end target data
 
 end subroutine oce_tra_adv_fct
