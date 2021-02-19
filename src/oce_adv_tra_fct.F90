@@ -87,21 +87,18 @@ subroutine oce_tra_adv_fct(dttf_h, dttf_v, ttf, lo, adf_h, adf_v, mesh)
     real(kind=WP), intent(inout)      :: adf_h(mesh%nl-1, myDim_edge2D)
     real(kind=WP), intent(inout)      :: adf_v(mesh%nl,  myDim_nod2D)
     integer                           :: n, nz, k, elem, enodes(3), num, el(2), nl1, nl2, edge
-    real(kind=WP)                     :: flux, ae !,tvert_max(mesh%nl-1),tvert_min(mesh%nl-1) 
-    real(kind=WP), dimension(:), allocatable :: tvert_max,tvert_min
+    real(kind=WP)                     :: flux, ae,tvert_max(mesh%nl-1),tvert_min(mesh%nl-1) 
+    real(kind=WP)                     :: tvert_max_nzm1, tvert_max_nz, tvert_max_nzp1
+    real(kind=WP)                     :: tvert_min_nzm1, tvert_min_nz, tvert_min_nzp1
     real(kind=WP)                     :: flux_eps=1e-16
     real(kind=WP)                     :: bignumber=1e3
     integer                           :: vlimit=1, vec_len
     integer                           :: n_idx, nn
 
-    real(kind=WP)                     :: tvert_max_1, tvert_max_2, tvert_max_3, tvert_min_1, tvert_min_2, tvert_min_3
 
 include "associate_mesh.h"
     !!$acc data copyin(LO)
     !!$omp target data map(to:LO)
-    allocate(tvert_max(mesh%nl-1),tvert_min(mesh%nl-1) )
-    tvert_max(:) = -huge(1._WP)
-    tvert_min(:) =  huge(1._WP)
 
     ! ------------      --------------------------------------------------------------
     ! ttf is the tracer field on step n
@@ -178,44 +175,44 @@ include "associate_mesh.h"
     if(vlimit==1) then
         !Horizontal
         !!$acc parallel loop gang present(nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs,fct_ttf_min,fct_ttf_max,LO) private(tvert_min,tvert_max) copyout(fct_ttf_min, fct_ttf_max) vector_length(vec_len)
-        !!$omp target teams distribute parallel do
-        !!$omp map(alloc:tvert_min, tvert_max) &
-        !!$omp private(tvert_min, tvert_max)
+        !$omp target teams distribute parallel do private(tvert_max_nzm1, tvert_max_nz, tvert_max_nzp1, tvert_min_nzm1, tvert_min_nz, tvert_min_nzp1, nz)
+
         do n=1, myDim_nod2D
-            !___________________________________________________________________
-            !!$acc loop vector
-            do nz=1,nlevels_nod2D(n)-1
-                ! max,min horizontal bound in cluster around node n in every 
-                ! vertical layer
-                ! nod_in_elem2D     --> elem indices of which node n is surrounded
-                ! nod_in_elem2D_num --> max number of surrounded elem 
-                do nn=1,nod_in_elem2D_num(n)
-                  n_idx=nod_in_elem2D(nn,n)
-                  tvert_max(nz)= max(tvert_max(nz),UV_rhs(1,nz,n_idx))
-                  tvert_min(nz)= min(tvert_min(nz),UV_rhs(2,nz,n_idx))
-                end do
+
+           tvert_max_nzm1 = 0
+           tvert_max_nz = maxval(UV_rhs(1,1, nod_in_elem2D(1:nod_in_elem2D_num(n),n)  ))
+           tvert_max_nzp1 = maxval(UV_rhs(1,2, nod_in_elem2D(1:nod_in_elem2D_num(n),n)  ))
+
+           tvert_min_nzm1 = 0
+           tvert_min_nz = minval(UV_rhs(2,1, nod_in_elem2D(1:nod_in_elem2D_num(n),n)  ))
+           tvert_min_nzp1 = minval(UV_rhs(2,2, nod_in_elem2D(1:nod_in_elem2D_num(n),n)  ))
+
+           fct_ttf_max(1,n)=tvert_max_nz-LO(1,n)
+           fct_ttf_min(1,n)=tvert_min_nz-LO(1,n)
+
+           do nz=2,nlevels_nod2D(n)-2
+
+              tvert_max_nzm1 = tvert_max_nz
+              tvert_max_nz = tvert_max_nzp1
+              tvert_max_nzp1 = maxval(UV_rhs(1,nz+1, nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
+
+              tvert_min_nzm1 = tvert_min_nz
+              tvert_min_nz = tvert_min_nzp1
+              tvert_min_nzp1 = minval(UV_rhs(2,nz+1, nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
+
+              fct_ttf_max(nz,n)=max(tvert_max_nzm1,tvert_max_nz,tvert_max_nzp1 )-LO(nz,n)
+              fct_ttf_min(nz,n)=min(tvert_min_nzm1,tvert_min_nz,tvert_min_nzp1 )-LO(nz,n)
+
             end do
-          
-            !___________________________________________________________________
-            ! calc max,min increment of surface layer with respect to low order 
-            ! solution 
-            fct_ttf_max(1,n)=tvert_max(1)-LO(1,n)
-            fct_ttf_min(1,n)=tvert_min(1)-LO(1,n)
-          
-            ! calc max,min increment from nz-1:nz+1 with respect to low order 
-            ! solution at layer nz
-            !$acc loop vector
-            do nz=2,nlevels_nod2D(n)-2  
-                fct_ttf_max(nz,n)=maxval(tvert_max(nz-1:nz+1))-LO(nz,n)
-                fct_ttf_min(nz,n)=minval(tvert_min(nz-1:nz+1))-LO(nz,n)
-            end do
-            ! calc max,min increment of bottom layer -1 with respect to low order 
-            ! solution 
+
             nz=nlevels_nod2D(n)-1
-            fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
-            fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)  
-        end do
-    end if
+            if(nz .gt. 1) then !!not needed if nlevels_nod2D(n)>2 is always true
+               fct_ttf_max(nz,n)=tvert_max_nzp1-LO(nz,n)
+               fct_ttf_min(nz,n)=tvert_min_nzp1-LO(nz,n)
+            endif
+
+         end do
+     end if
 
     !___________________________________________________________________________
     ! Vertical2: Similar to the version above, but the vertical bounds are more 
@@ -436,6 +433,5 @@ include "associate_mesh.h"
     !!$acc end data
 
     !!$omp end target data
-    deallocate(tvert_max,tvert_min )
 
 end subroutine oce_tra_adv_fct
