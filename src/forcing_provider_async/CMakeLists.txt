@@ -29,10 +29,14 @@ check_symbol_exists(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 "stdlib.h" HAVE_SWAP_1)
 check_symbol_exists(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2 "stdlib.h" HAVE_SWAP_2)
 check_symbol_exists(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4 "stdlib.h" HAVE_SWAP_4)
 check_symbol_exists(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8 "stdlib.h" HAVE_SWAP_8)
+# nvhpc sdk 21.1 requires this
+check_symbol_exists(__GCC_ATOMIC_TEST_AND_SET_TRUEVAL "stdlib.h" HAVE_TRUEVAL)
+
 
 target_compile_options(${PROJECT_NAME} PRIVATE
 	$<$<NOT:$<BOOL:${HAVE_SWAP_1}>>:-D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1>
 	$<$<NOT:$<BOOL:${HAVE_SWAP_2}>>:-D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2>
 	$<$<NOT:$<BOOL:${HAVE_SWAP_4}>>:-D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4>
 	$<$<NOT:$<BOOL:${HAVE_SWAP_8}>>:-D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8>
+        $<$<NOT:$<BOOL:${HAVE_TRUEVAL}>>:-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1>
 )
